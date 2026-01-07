@@ -1,61 +1,35 @@
 package lt.satsyuk.auth;
 
-import lt.satsyuk.config.JwtService;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/auth")
 public class AuthController {
 
-    private final AuthenticationManager authenticationManager;
-    private final JwtService jwtService;
+    private final KeycloakAuthService keycloak;
 
-    public AuthController(AuthenticationManager authenticationManager,
-                          JwtService jwtService) {
-        this.authenticationManager = authenticationManager;
-        this.jwtService = jwtService;
+    public AuthController(KeycloakAuthService keycloak) {
+        this.keycloak = keycloak;
     }
 
     @PostMapping("/login")
-    public ResponseEntity<AuthResponse> login(@RequestBody AuthRequest request) {
-
-        Authentication auth = authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(
-                        request.username(), request.password()
-                )
-        );
-
-        var user = (UserDetails) auth.getPrincipal();
-
-        return ResponseEntity.ok(
-                new AuthResponse(
-                        jwtService.generateAccessToken(user),
-                        jwtService.generateRefreshToken(user)
-                )
-        );
+    public ResponseEntity<KeycloakTokenResponse> login(@RequestBody AuthRequest req) {
+        return ResponseEntity.ok(keycloak.login(req.username(), req.password()));
     }
 
     @PostMapping("/refresh")
-    public ResponseEntity<AuthResponse> refresh() {
+    public ResponseEntity<KeycloakTokenResponse> refresh(
+            @RequestParam("refreshToken") String refreshToken
+    ) {
+        return ResponseEntity.ok(keycloak.refresh(refreshToken));
+    }
 
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-
-        if (auth == null || !(auth.getPrincipal() instanceof UserDetails user)) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
-        }
-
-        return ResponseEntity.ok(
-                new AuthResponse(
-                        jwtService.generateAccessToken(user),
-                        jwtService.generateRefreshToken(user)
-                )
-        );
+    @PostMapping("/logout")
+    public ResponseEntity<Void> logout(
+            @RequestParam("refreshToken") String refreshToken
+    ) {
+        keycloak.logout(refreshToken);
+        return ResponseEntity.ok().build();
     }
 }
