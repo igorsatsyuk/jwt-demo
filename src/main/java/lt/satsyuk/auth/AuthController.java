@@ -1,35 +1,27 @@
 package lt.satsyuk.auth;
 
-import org.springframework.http.ResponseEntity;
+import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/auth")
+@RequiredArgsConstructor
 public class AuthController {
 
-    private final KeycloakAuthService keycloak;
-
-    public AuthController(KeycloakAuthService keycloak) {
-        this.keycloak = keycloak;
-    }
+    private final KeycloakAuthService authService;
 
     @PostMapping("/login")
-    public ResponseEntity<KeycloakTokenResponse> login(@RequestBody AuthRequest req) {
-        return ResponseEntity.ok(keycloak.login(req.username(), req.password()));
+    public KeycloakTokenResponse login(@RequestBody LoginRequest request) {
+        return authService.login(request);
     }
 
     @PostMapping("/refresh")
-    public ResponseEntity<KeycloakTokenResponse> refresh(
-            @RequestParam("refreshToken") String refreshToken
-    ) {
-        return ResponseEntity.ok(keycloak.refresh(refreshToken));
+    public KeycloakTokenResponse refresh(@RequestBody RefreshRequest request) {
+        return authService.refresh(request);
     }
 
     @PostMapping("/logout")
-    public ResponseEntity<Void> logout(
-            @RequestParam("refreshToken") String refreshToken
-    ) {
-        keycloak.logout(refreshToken);
-        return ResponseEntity.ok().build();
+    public void logout(@RequestBody LogoutRequest request) {
+        authService.logout(request);
     }
 }

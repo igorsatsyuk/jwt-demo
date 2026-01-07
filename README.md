@@ -1,224 +1,339 @@
-Spring Boot + Keycloak 26.x + Integration Tests
+```markdown
+# 🔐 Spring Boot + Keycloak OAuth2 Proxy  
+Dynamic authentication with client-provided `client_id` and `client_secret`
 
-## 🚀 О проекте
+This project is a lightweight but production-ready backend that acts as an **OAuth2 proxy in front of Keycloak**.  
+The backend does **not** store `client_id` or `client_secret`.  
+Instead, the client sends them in each authentication request, making the system flexible and multi-tenant.
 
-Этот проект демонстрирует полноценную интеграцию **Spring Boot (Resource Server)** и **Keycloak 26.x**:
-
-- 🔐 Авторизация через Keycloak (password grant)  
-- 🔁 Refresh токены  
-- 🚪 Logout (ревокация refresh токена)  
-- 👤 Роли `USER` и `ADMIN` из `realm_access.roles`  
-- 🛡 Защита REST‑эндпоинтов через `@PreAuthorize`  
-- 🧪 Интеграционные тесты WebTestClient, использующие реальный Keycloak  
-
-Проект полностью воспроизводим благодаря **docker-compose** и **realm-export.json**.
-
----
-
-## 📂 Структура проекта
-
-```
-project/
-│
-├── docker-compose.yaml
-├── keycloak/
-│   └── realm-export.json
-│
-├── src/
-│   ├── main/java/...
-│   └── test/java/...
-│
-└── pom.xml
-```
+Supported features:
+- 🔑 Username/password login  
+- 🔄 Token refresh  
+- 🚪 Logout (refresh token revocation)  
+- 🛡 JWT validation via Spring Security  
+- 🎭 Role-based authorization (`USER`, `ADMIN`)  
+- 🧪 Full integration test suite  
 
 ---
 
-## 🐳 Запуск Keycloak через Docker
+## 📦 Tech Stack
 
-### 1. Установи Docker Desktop  
-`https://www.docker.com/products/docker-desktop/` [(docker.com in Bing)](https://www.bing.com/search?q="https%3A%2F%2Fwww.docker.com%2Fproducts%2Fdocker-desktop%2F")
+- **Java 21**
+- **Spring Boot 3**
+- **Spring Security (Resource Server)**
+- **Spring WebFlux WebClient**
+- **Keycloak 26+**
+- **JUnit 5 + WebTestClient**
+- **Docker Compose**
 
-### 2. Запусти Keycloak
+---
 
-В корне проекта:
+## 🚀 Running the Project
+
+### 1. Start Keycloak
 
 ```bash
 docker compose up -d
 ```
 
-Keycloak поднимется на:
+Keycloak will be available at:
 
 ```
 http://localhost:8080
 ```
 
-### 3. Доступ в админ‑панель
+### 2. Start Spring Boot
 
-```
-http://localhost:8080/admin
-```
-
-Логин:
-
-```
-admin
-admin
+```bash
+mvn spring-boot:run
 ```
 
-### 4. Что импортируется автоматически
+Application runs at:
 
-Файл `keycloak/realm-export.json` создаёт:
-
-#### Realm
 ```
-my-realm
+http://localhost:8081
 ```
-
-#### Клиент
-```
-spring-app
-```
-
-- Confidential  
-- Direct Access Grants = ON  
-- Full Scope Allowed = ON  
-
-#### Пользователи
-
-| Username | Password | Roles |
-|----------|----------|--------|
-| user     | password | USER   |
-| admin    | password | ADMIN  |
 
 ---
 
-## 🔧 Настройки Spring Boot
-
-`application.properties`:
+## ⚙️ Configuration (`application.properties`)
 
 ```properties
+server.port=8081
+
 keycloak.realm=my-realm
 keycloak.auth-server-url=http://localhost:8080
-keycloak.token-uri=${keycloak.auth-server-url}/realms/${keycloak.realm}/protocol/openid-connect/token
-keycloak.logout-uri=${keycloak.auth-server-url}/realms/${keycloak.realm}/protocol/openid-connect/logout
-keycloak.client-id=spring-app
-keycloak.client-secret=CHANGE_ME
+
+keycloak.token-url=${keycloak.auth-server-url}/realms/${keycloak.realm}/protocol/openid-connect/token
+keycloak.logout-url=${keycloak.auth-server-url}/realms/${keycloak.realm}/protocol/openid-connect/logout
 
 spring.security.oauth2.resourceserver.jwt.issuer-uri=${keycloak.auth-server-url}/realms/${keycloak.realm}
 ```
 
 ---
 
-## 🔐 SecurityConfig
+# 🧩 Architecture
 
-```java
-@Configuration
-@EnableMethodSecurity
-public class SecurityConfig {
+## High-level flow
 
-    @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+```
++-------------+        +-------------------+        +----------------+
+|   Client    | -----> | Spring Boot Proxy | -----> |   Keycloak     |
+| (Frontend)  |        |  (This project)   |        | Auth Server    |
++-------------+        +-------------------+        +----------------+
+        |                       |                           |
+        |  username/password    |                           |
+        |  client_id/secret     |                           |
+        |---------------------->|                           |
+        |                       |  /token, /logout          |
+        |                       |-------------------------->|
+        |                       |                           |
+```
 
-        http
-                .csrf(csrf -> csrf.disable())
-                .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/auth/**").permitAll()
-                        .anyRequest().authenticated()
-                )
-                .oauth2ResourceServer(oauth -> oauth
-                        .jwt(jwt -> {
-                            jwt.jwtAuthenticationConverter(jwtAuthConverter());
-                        })
-                );
+## Authorization flow
 
-        return http.build();
-    }
+```
+Client
+  |
+  | POST /auth/login
+  | { username, password, clientId, clientSecret }
+  v
+Spring Boot Proxy
+  |
+  | POST /realms/.../token
+  v
+Keycloak
+  |
+  | access_token + refresh_token
+  v
+Spring Boot Proxy
+  |
+  | returns tokens to client
+  v
+Client
+```
 
-    @Bean
-    public JwtAuthenticationConverter jwtAuthConverter() {
+---
 
-        JwtGrantedAuthoritiesConverter converter = new JwtGrantedAuthoritiesConverter();
-        converter.setAuthorityPrefix("");
-        converter.setAuthoritiesClaimName("realm_access.roles");
+# 🔐 API Endpoints
 
-        JwtAuthenticationConverter jwtConverter = new JwtAuthenticationConverter();
-        jwtConverter.setJwtGrantedAuthoritiesConverter(converter);
-        return jwtConverter;
-    }
+## 1. Login
+`POST /auth/login`
+
+```json
+{
+  "username": "user",
+  "password": "password",
+  "clientId": "spring-app",
+  "clientSecret": "CHANGE_ME"
+}
+```
+
+Response:
+
+```json
+{
+  "access_token": "...",
+  "refresh_token": "...",
+  "expires_in": 300,
+  "refresh_expires_in": 1800
 }
 ```
 
 ---
 
-## 🔥 Защищённые эндпоинты
+## 2. Refresh Token
+`POST /auth/refresh`
 
-```java
-@GetMapping("/api/user")
-@PreAuthorize("hasAuthority('USER')")
-public String user() {
-    return "user endpoint";
-}
-
-@GetMapping("/api/admin")
-@PreAuthorize("hasAuthority('ADMIN')")
-public String admin() {
-    return "admin endpoint";
+```json
+{
+  "refreshToken": "eyJhbGciOi...",
+  "clientId": "spring-app",
+  "clientSecret": "CHANGE_ME"
 }
 ```
 
 ---
 
-## 🧪 Интеграционные тесты
+## 3. Logout
+`POST /auth/logout`
 
-Запуск:
+```json
+{
+  "refreshToken": "eyJhbGciOi...",
+  "clientId": "spring-app",
+  "clientSecret": "CHANGE_ME"
+}
+```
+
+---
+
+# 🛡 Protected Endpoints
+
+### `/api/user`
+Requires role: **USER**
+
+### `/api/admin`
+Requires role: **ADMIN**
+
+Example:
+
+```
+GET /api/user
+Authorization: Bearer <access_token>
+```
+
+---
+
+# 🧪 Integration Tests
+
+Tests verify:
+
+- login
+- refresh
+- logout
+- role-based access
+- JWT validation
+- Keycloak integration
+
+Run:
 
 ```bash
 mvn test
 ```
 
-Проверяется:
-
-- ✔ login  
-- ✔ доступ к защищённым эндпоинтам  
-- ✔ refresh токена  
-- ✔ logout (ревокация refresh токена)  
-- ✔ запрет доступа user → /api/admin  
-
 ---
 
-## 🧱 Пример теста
+# 🧱 Project Structure
 
-```java
-@Test
-void loginAndAccessUserEndpoint() {
-    var token = web.post()
-            .uri("/auth/login")
-            .bodyValue(new AuthRequest("user", "password"))
-            .exchange()
-            .expectStatus().isOk()
-            .expectBody(KeycloakTokenResponse.class)
-            .returnResult()
-            .getResponseBody();
+```
+src/main/java
+ └── lt/satsyuk
+      ├── auth
+      │    ├── AuthController.java
+      │    ├── KeycloakAuthService.java
+      │    ├── LoginRequest.java
+      │    ├── RefreshRequest.java
+      │    ├── LogoutRequest.java
+      │    └── KeycloakTokenResponse.java
+      ├── security
+      │    └── SecurityConfig.java
+      └── JwtDemoApplication.java
 
-    web.get()
-            .uri("/api/user")
-            .header("Authorization", "Bearer " + token.access_token())
-            .exchange()
-            .expectStatus().isOk()
-            .expectBody(String.class)
-            .isEqualTo("user endpoint");
-}
+src/test/java
+ └── lt/satsyuk
+      └── KeycloakIntegrationIT.java
 ```
 
 ---
 
-## 🧹 Остановка Keycloak
+# 🛠 Troubleshooting
 
-```bash
-docker compose down
+### ❌ Error: `Could not resolve placeholder 'keycloak.token-url'`
+**Cause:** Missing property in `application.properties`.
+
+**Fix:**
+
+```properties
+keycloak.token-url=http://localhost:8080/realms/my-realm/protocol/openid-connect/token
 ```
 
 ---
 
-## 🎉 Готово!
+### ❌ `WebClient` not found
+**Cause:** Missing dependency.
 
+**Fix:**
+
+```xml
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-webflux</artifactId>
+</dependency>
+```
+
+---
+
+### ❌ Lombok annotations not working
+**Fix:**
+
+- Install Lombok plugin in IntelliJ
+- Enable annotation processing:  
+  `Settings → Build → Compiler → Annotation Processors → Enable`
+
+---
+
+### ❌ 403 on `/api/user` or `/api/admin`
+**Cause:** Keycloak roles are inside `realm_access.roles`.
+
+**Fix:** Use custom JWT converter.
+
+---
+
+### ❌ Refresh token fails after logout
+This is expected — Keycloak revokes refresh tokens on logout.
+
+---
+
+# 🎨 How to Add a Frontend
+
+You can integrate **any frontend** (React, Vue, Angular, mobile apps, desktop apps).
+
+### Frontend responsibilities:
+
+1. Collect:
+    - username
+    - password
+    - clientId
+    - clientSecret
+
+2. Send them to:
+
+```
+POST /auth/login
+```
+
+3. Store:
+    - access_token
+    - refresh_token
+
+4. Attach access_token to every request:
+
+```
+Authorization: Bearer <token>
+```
+
+5. When access_token expires:
+    - call `/auth/refresh`
+
+6. When user logs out:
+    - call `/auth/logout`
+
+### Example (React)
+
+```js
+const login = async () => {
+  const res = await fetch("http://localhost:8081/auth/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      username,
+      password,
+      clientId: "spring-app",
+      clientSecret: "CHANGE_ME"
+    })
+  });
+
+  const tokens = await res.json();
+  localStorage.setItem("access", tokens.access_token);
+  localStorage.setItem("refresh", tokens.refresh_token);
+};
+```
+
+---
+
+# 📄 License
+
+MIT (or any license you prefer).
+
+```

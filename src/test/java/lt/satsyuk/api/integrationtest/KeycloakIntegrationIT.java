@@ -1,7 +1,9 @@
 package lt.satsyuk.api.integrationtest;
 
-import lt.satsyuk.auth.AuthRequest;
 import lt.satsyuk.auth.KeycloakTokenResponse;
+import lt.satsyuk.auth.LoginRequest;
+import lt.satsyuk.auth.LogoutRequest;
+import lt.satsyuk.auth.RefreshRequest;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
@@ -19,12 +21,17 @@ class KeycloakIntegrationIT {
     @Autowired
     private WebTestClient web;
 
+    private static final String CLIENT_ID = "spring-app";
+    private static final String CLIENT_SECRET = "vYbuDDmT4ouy6vBn6ZzaEPkmaMSHfvab";
+
     @Test
     void loginAndAccessUserEndpoint() {
+        LoginRequest login = new LoginRequest("user", "password", CLIENT_ID, CLIENT_SECRET);
+
         KeycloakTokenResponse token = web.post()
                 .uri("/auth/login")
                 .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(new AuthRequest("user", "password"))
+                .bodyValue(login)
                 .exchange()
                 .expectStatus().isOk()
                 .expectBody(KeycloakTokenResponse.class)
@@ -42,10 +49,12 @@ class KeycloakIntegrationIT {
 
     @Test
     void adminCanAccessAdminEndpoint() {
+        LoginRequest login = new LoginRequest("admin", "password", CLIENT_ID, CLIENT_SECRET);
+
         KeycloakTokenResponse token = web.post()
                 .uri("/auth/login")
                 .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(new AuthRequest("admin", "password"))
+                .bodyValue(login)
                 .exchange()
                 .expectStatus().isOk()
                 .expectBody(KeycloakTokenResponse.class)
@@ -63,10 +72,12 @@ class KeycloakIntegrationIT {
 
     @Test
     void userCannotAccessAdminEndpoint() {
+        LoginRequest login = new LoginRequest("user", "password", CLIENT_ID, CLIENT_SECRET);
+
         KeycloakTokenResponse token = web.post()
                 .uri("/auth/login")
                 .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(new AuthRequest("user", "password"))
+                .bodyValue(login)
                 .exchange()
                 .expectStatus().isOk()
                 .expectBody(KeycloakTokenResponse.class)
@@ -82,21 +93,24 @@ class KeycloakIntegrationIT {
 
     @Test
     void refreshTokenFlow() {
+        LoginRequest login = new LoginRequest("user", "password", CLIENT_ID, CLIENT_SECRET);
+
         KeycloakTokenResponse token = web.post()
                 .uri("/auth/login")
                 .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(new AuthRequest("user", "password"))
+                .bodyValue(login)
                 .exchange()
                 .expectStatus().isOk()
                 .expectBody(KeycloakTokenResponse.class)
                 .returnResult()
                 .getResponseBody();
 
+        RefreshRequest refresh = new RefreshRequest(token.refresh_token(), CLIENT_ID, CLIENT_SECRET);
+
         KeycloakTokenResponse refreshed = web.post()
-                .uri(uriBuilder -> uriBuilder
-                        .path("/auth/refresh")
-                        .queryParam("refreshToken", token.refresh_token())
-                        .build())
+                .uri("/auth/refresh")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(refresh)
                 .exchange()
                 .expectStatus().isOk()
                 .expectBody(KeycloakTokenResponse.class)
@@ -112,29 +126,33 @@ class KeycloakIntegrationIT {
 
     @Test
     void logoutRevokesRefreshToken() {
+        LoginRequest login = new LoginRequest("user", "password", CLIENT_ID, CLIENT_SECRET);
+
         KeycloakTokenResponse token = web.post()
                 .uri("/auth/login")
                 .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(new AuthRequest("user", "password"))
+                .bodyValue(login)
                 .exchange()
                 .expectStatus().isOk()
                 .expectBody(KeycloakTokenResponse.class)
                 .returnResult()
                 .getResponseBody();
 
+        LogoutRequest logout = new LogoutRequest(token.refresh_token(), CLIENT_ID, CLIENT_SECRET);
+
         web.post()
-                .uri(uriBuilder -> uriBuilder
-                        .path("/auth/logout")
-                        .queryParam("refreshToken", token.refresh_token())
-                        .build())
+                .uri("/auth/logout")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(logout)
                 .exchange()
                 .expectStatus().isOk();
 
+        RefreshRequest refresh = new RefreshRequest(token.refresh_token(), CLIENT_ID, CLIENT_SECRET);
+
         web.post()
-                .uri(uriBuilder -> uriBuilder
-                        .path("/auth/refresh")
-                        .queryParam("refreshToken", token.refresh_token())
-                        .build())
+                .uri("/auth/refresh")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(refresh)
                 .exchange()
                 .expectStatus().is4xxClientError();
     }

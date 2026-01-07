@@ -1,68 +1,69 @@
 package lt.satsyuk.auth;
 
+import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
-import org.springframework.web.client.RestTemplate;
+import org.springframework.web.reactive.function.client.WebClient;
 
 @Service
+@RequiredArgsConstructor
 public class KeycloakAuthService {
 
-    private final RestTemplate rest = new RestTemplate();
+    @Value("${keycloak.token-url}")
+    private String tokenUrl;
 
-    @Value("${keycloak.token-uri}")
-    private String tokenUri;
+    @Value("${keycloak.logout-url}")
+    private String logoutUrl;
 
-    @Value("${keycloak.logout-uri}")
-    private String logoutUri;
+    private final WebClient webClient = WebClient.create();
 
-    @Value("${keycloak.client-id}")
-    private String clientId;
-
-    @Value("${keycloak.client-secret}")
-    private String clientSecret;
-
-    public KeycloakTokenResponse login(String username, String password) {
-
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
+    public KeycloakTokenResponse login(LoginRequest request) {
 
         MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
         form.add("grant_type", "password");
-        form.add("client_id", clientId);
-        form.add("client_secret", clientSecret);
-        form.add("username", username);
-        form.add("password", password);
+        form.add("username", request.username());
+        form.add("password", request.password());
+        form.add("client_id", request.clientId());
+        form.add("client_secret", request.clientSecret());
 
-        return rest.postForObject(tokenUri, new HttpEntity<>(form, headers), KeycloakTokenResponse.class);
+        return webClient.post()
+                .uri(tokenUrl)
+                .bodyValue(form)
+                .retrieve()
+                .bodyToMono(KeycloakTokenResponse.class)
+                .block();
     }
 
-    public KeycloakTokenResponse refresh(String refreshToken) {
-
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
+    public KeycloakTokenResponse refresh(RefreshRequest request) {
 
         MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
         form.add("grant_type", "refresh_token");
-        form.add("client_id", clientId);
-        form.add("client_secret", clientSecret);
-        form.add("refresh_token", refreshToken);
+        form.add("refresh_token", request.refreshToken());
+        form.add("client_id", request.clientId());
+        form.add("client_secret", request.clientSecret());
 
-        return rest.postForObject(tokenUri, new HttpEntity<>(form, headers), KeycloakTokenResponse.class);
+        return webClient.post()
+                .uri(tokenUrl)
+                .bodyValue(form)
+                .retrieve()
+                .bodyToMono(KeycloakTokenResponse.class)
+                .block();
     }
 
-    public void logout(String refreshToken) {
-
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
+    public void logout(LogoutRequest request) {
 
         MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
-        form.add("client_id", clientId);
-        form.add("client_secret", clientSecret);
-        form.add("refresh_token", refreshToken);
+        form.add("refresh_token", request.refreshToken());
+        form.add("client_id", request.clientId());
+        form.add("client_secret", request.clientSecret());
 
-        rest.postForLocation(logoutUri, new HttpEntity<>(form, headers));
+        webClient.post()
+                .uri(logoutUrl)
+                .bodyValue(form)
+                .retrieve()
+                .toBodilessEntity()
+                .block();
     }
 }
