@@ -2,9 +2,9 @@
 # 🔐 Spring Boot + Keycloak OAuth2 Proxy  
 Dynamic authentication with client-provided `client_id` and `client_secret`
 
-This project is a lightweight but production-ready backend that acts as an **OAuth2 proxy in front of Keycloak**.  
+This project implements a clean, production-ready OAuth2 proxy in front of Keycloak.  
 The backend does **not** store `client_id` or `client_secret`.  
-Instead, the client sends them in each authentication request, making the system flexible and multi-tenant.
+Instead, the client sends them in each authentication request, making the system flexible, multi-tenant, and secure.
 
 Supported features:
 - 🔑 Username/password login  
@@ -12,19 +12,21 @@ Supported features:
 - 🚪 Logout (refresh token revocation)  
 - 🛡 JWT validation via Spring Security  
 - 🎭 Role-based authorization (`USER`, `ADMIN`)  
+- 🚦 Configurable rate limiting (Bucket4j)  
 - 🧪 Full integration test suite  
 
 ---
 
 ## 📦 Tech Stack
 
-- **Java 21**
-- **Spring Boot 3**
-- **Spring Security (Resource Server)**
-- **Spring WebFlux WebClient**
-- **Keycloak 26+**
-- **JUnit 5 + WebTestClient**
-- **Docker Compose**
+- Java 21  
+- Spring Boot 3  
+- Spring Security (Resource Server)  
+- Spring WebFlux WebClient  
+- Keycloak 26+  
+- Bucket4j Spring Boot Starter  
+- JUnit 5 + WebTestClient  
+- Docker Compose  
 
 ---
 
@@ -70,6 +72,9 @@ keycloak.logout-url=${keycloak.auth-server-url}/realms/${keycloak.realm}/protoco
 spring.security.oauth2.resourceserver.jwt.issuer-uri=${keycloak.auth-server-url}/realms/${keycloak.realm}
 ```
 
+The backend **does not store** any client credentials.  
+All credentials are provided dynamically by the client.
+
 ---
 
 # 🧩 Architecture
@@ -90,7 +95,7 @@ spring.security.oauth2.resourceserver.jwt.issuer-uri=${keycloak.auth-server-url}
         |                       |                           |
 ```
 
-## Authorization flow
+## Authentication flow
 
 ```
 Client
@@ -185,9 +190,66 @@ Authorization: Bearer <access_token>
 
 ---
 
+# 🚦 Rate Limiting (Bucket4j, configuration‑only)
+
+The project supports **fully configurable rate limiting** using  
+**Bucket4j Spring Boot Starter**, without any custom Java code.
+
+Rate limits are defined entirely in `application.properties`, allowing you to:
+
+- limit any endpoint
+- set different limits per endpoint
+- configure limits per clientId, IP, or request expression
+- enable/disable rate limiting without code changes
+
+### 📌 Example: Limit `/auth/login` to 5 requests per minute
+
+```properties
+bucket4j.enabled=true
+
+bucket4j.filters[0].cache-name=rate-limit-cache
+bucket4j.filters[0].url=/auth/login
+bucket4j.filters[0].rate-limits[0].bandwidths[0].capacity=5
+bucket4j.filters[0].rate-limits[0].bandwidths[0].refill-capacity=5
+bucket4j.filters[0].rate-limits[0].bandwidths[0].refill-period=1m
+```
+
+### 📌 Example: Limit `/api/admin` to 20 requests per minute
+
+```properties
+bucket4j.filters[1].cache-name=rate-limit-cache
+bucket4j.filters[1].url=/api/admin
+bucket4j.filters[1].rate-limits[0].bandwidths[0].capacity=20
+bucket4j.filters[1].rate-limits[0].bandwidths[0].refill-capacity=20
+bucket4j.filters[1].rate-limits[0].bandwidths[0].refill-period=1m
+```
+
+### 📌 Example: Rate limit based on clientId
+
+```properties
+bucket4j.filters[2].url=/auth/login
+bucket4j.filters[2].rate-limits[0].expression=clientId == 'spring-app'
+bucket4j.filters[2].rate-limits[0].bandwidths[0].capacity=3
+bucket4j.filters[2].rate-limits[0].bandwidths[0].refill-capacity=3
+bucket4j.filters[2].rate-limits[0].bandwidths[0].refill-period=1m
+```
+
+### ✔ No Java code required
+
+The starter automatically:
+
+- registers filters
+- applies Bucket4j rules
+- handles throttling responses
+- logs rate limit violations
+
+Your application stays clean and configuration‑driven.
+
+---
+
 # 🧪 Integration Tests
 
-Tests verify:
+Integration tests verify:
 
 - login
 - refresh
@@ -229,21 +291,18 @@ src/test/java
 
 # 🛠 Troubleshooting
 
-### ❌ Error: `Could not resolve placeholder 'keycloak.token-url'`
-**Cause:** Missing property in `application.properties`.
-
-**Fix:**
+### ❌ `Could not resolve placeholder 'keycloak.token-url'`
+**Cause:** property missing or misnamed.  
+**Fix:** ensure:
 
 ```properties
-keycloak.token-url=http://localhost:8080/realms/my-realm/protocol/openid-connect/token
+keycloak.token-url=...
 ```
 
 ---
 
 ### ❌ `WebClient` not found
-**Cause:** Missing dependency.
-
-**Fix:**
+Add dependency:
 
 ```xml
 <dependency>
@@ -255,47 +314,40 @@ keycloak.token-url=http://localhost:8080/realms/my-realm/protocol/openid-connect
 ---
 
 ### ❌ Lombok annotations not working
-**Fix:**
+Enable annotation processing:
 
-- Install Lombok plugin in IntelliJ
-- Enable annotation processing:  
-  `Settings → Build → Compiler → Annotation Processors → Enable`
+```
+Settings → Build → Compiler → Annotation Processors → Enable
+```
 
 ---
 
 ### ❌ 403 on `/api/user` or `/api/admin`
-**Cause:** Keycloak roles are inside `realm_access.roles`.
+Ensure Keycloak roles are inside:
 
-**Fix:** Use custom JWT converter.
-
----
-
-### ❌ Refresh token fails after logout
-This is expected — Keycloak revokes refresh tokens on logout.
+```json
+"realm_access": { "roles": ["USER"] }
+```
 
 ---
 
-# 🎨 How to Add a Frontend
+# 🎨 Adding a Frontend
 
-You can integrate **any frontend** (React, Vue, Angular, mobile apps, desktop apps).
+Any frontend (React, Vue, Angular, mobile) can integrate easily.
 
 ### Frontend responsibilities:
 
 1. Collect:
-    - username
-    - password
-    - clientId
-    - clientSecret
+   - username
+   - password
+   - clientId
+   - clientSecret
 
-2. Send them to:
-
-```
-POST /auth/login
-```
+2. Send them to `/auth/login`
 
 3. Store:
-    - access_token
-    - refresh_token
+   - access_token
+   - refresh_token
 
 4. Attach access_token to every request:
 
@@ -303,11 +355,8 @@ POST /auth/login
 Authorization: Bearer <token>
 ```
 
-5. When access_token expires:
-    - call `/auth/refresh`
-
-6. When user logs out:
-    - call `/auth/logout`
+5. Refresh token when needed
+6. Call `/auth/logout` on logout
 
 ### Example (React)
 
@@ -335,5 +384,4 @@ const login = async () => {
 # 📄 License
 
 MIT (or any license you prefer).
-
 ```
