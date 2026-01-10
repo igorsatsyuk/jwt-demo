@@ -1,6 +1,7 @@
 package lt.satsyuk.api.integrationtest;
 
 import lt.satsyuk.MainApplication;
+import lt.satsyuk.auth.KeycloakProperties;
 import lt.satsyuk.auth.dto.LoginRequest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -10,6 +11,7 @@ import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.http.*;
 
+import java.awt.*;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -20,8 +22,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 )
 public class KeycloakIntegrationIT {
 
-    private static final String CLIENT_ID = "spring-app";
-    private static final String CLIENT_SECRET = "vYbuDDmT4ouy6vBn6ZzaEPkmaMSHfvab";
+    @Autowired
+    private KeycloakProperties props;
 
     private static final String USERNAME = "user";
     private static final String USER_PASSWORD = "password";
@@ -38,9 +40,10 @@ public class KeycloakIntegrationIT {
 
     @BeforeEach
     void setUp() {
-        loginUrl = "http://localhost:" + port + "/api/auth/login";
-        refreshUrl = "http://localhost:" + port + "/api/auth/refresh";
-        logoutUrl = "http://localhost:" + port + "/api/auth/logout";
+        String mainUrl = "http://localhost:" + port + "/api/auth";
+        loginUrl = mainUrl + "/login";
+        refreshUrl = mainUrl + "/refresh";
+        logoutUrl = mainUrl + "/logout";
     }
 
     // ------------------------------------------------------------
@@ -52,8 +55,8 @@ public class KeycloakIntegrationIT {
         LoginRequest request = new LoginRequest(
                 USERNAME,
                 USER_PASSWORD,
-                CLIENT_ID,
-                CLIENT_SECRET
+                props.getClientId(),
+                props.getClientSecret()
         );
 
         HttpHeaders headers = new HttpHeaders();
@@ -81,8 +84,8 @@ public class KeycloakIntegrationIT {
         LoginRequest request = new LoginRequest(
                 USERNAME,
                 "wrongpassword",
-                CLIENT_ID,
-                CLIENT_SECRET
+                props.getClientId(),
+                props.getClientSecret()
         );
 
         HttpHeaders headers = new HttpHeaders();
@@ -105,8 +108,8 @@ public class KeycloakIntegrationIT {
         LoginRequest request = new LoginRequest(
                 "unknownuser",
                 "whatever",
-                CLIENT_ID,
-                CLIENT_SECRET
+                props.getClientId(),
+                props.getClientSecret()
         );
 
         HttpHeaders headers = new HttpHeaders();
@@ -134,8 +137,8 @@ public class KeycloakIntegrationIT {
         LoginRequest request = new LoginRequest(
                 USERNAME,
                 USER_PASSWORD,
-                CLIENT_ID,
-                CLIENT_SECRET
+                props.getClientId(),
+                props.getClientSecret()
         );
 
         HttpHeaders headers = new HttpHeaders();
@@ -161,8 +164,8 @@ public class KeycloakIntegrationIT {
         HttpEntity<Map<String, String>> refreshEntity =
                 new HttpEntity<>(Map.of(
                         "refreshToken", refreshToken,
-                        "clientId", CLIENT_ID,
-                        "clientSecret", CLIENT_SECRET
+                        "clientId", props.getClientId(),
+                        "clientSecret", props.getClientSecret()
                 ), headers);
 
         ResponseEntity<Map> refreshResponse = restTemplate.exchange(
@@ -188,8 +191,8 @@ public class KeycloakIntegrationIT {
         HttpEntity<Map<String, String>> entity =
                 new HttpEntity<>(Map.of(
                         "refresh_token", "invalid-token",
-                        "clientId", CLIENT_ID,
-                        "clientSecret", CLIENT_SECRET
+                        "clientId", props.getClientId(),
+                        "clientSecret", props.getClientSecret()
                 ), headers);
 
         ResponseEntity<Map> response = restTemplate.exchange(
@@ -212,8 +215,8 @@ public class KeycloakIntegrationIT {
         LoginRequest request = new LoginRequest(
                 USERNAME,
                 USER_PASSWORD,
-                CLIENT_ID,
-                CLIENT_SECRET
+                props.getClientId(),
+                props.getClientSecret()
         );
 
         HttpHeaders headers = new HttpHeaders();
@@ -239,8 +242,8 @@ public class KeycloakIntegrationIT {
         HttpEntity<Map<String, String>> logoutEntity =
                 new HttpEntity<>(Map.of(
                         "refresh_token", refreshToken,
-                        "clientId", CLIENT_ID,
-                        "clientSecret", CLIENT_SECRET
+                        "clientId", props.getClientId(),
+                        "clientSecret", props.getClientSecret()
                 ), headers);
 
         ResponseEntity<Map> logoutResponse = restTemplate.exchange(
@@ -261,8 +264,8 @@ public class KeycloakIntegrationIT {
         HttpEntity<Map<String, String>> entity =
                 new HttpEntity<>(Map.of(
                         "refresh_token", "invalid-token",
-                        "clientId", CLIENT_ID,
-                        "clientSecret", CLIENT_SECRET
+                        "clientId", props.getClientId(),
+                        "clientSecret", props.getClientSecret()
                 ), headers);
 
         ResponseEntity<Map> response = restTemplate.exchange(
