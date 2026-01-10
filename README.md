@@ -14,31 +14,40 @@ Supported features:
 - 🎭 Role-based authorization (`USER`, `ADMIN`)  
 - 🚦 Configurable rate limiting (Bucket4j)  
 - 🧪 Full integration test suite  
+- 📦 Automatic Keycloak realm import (users, roles, mappers)
 
 ---
 
 ## 📦 Tech Stack
 
-- Java 21  
-- Spring Boot 3  
+- Java 17  
+- Spring Boot 3.2  
 - Spring Security (Resource Server)  
-- Spring WebFlux WebClient  
+- Spring Web (REST)  
 - Keycloak 26+  
 - Bucket4j Spring Boot Starter  
-- JUnit 5 + WebTestClient  
+- JUnit 5 + TestRestTemplate  
 - Docker Compose  
 
 ---
 
 ## 🚀 Running the Project
 
-### 1. Start Keycloak
+### 1. Start Keycloak (with automatic realm import)
 
 ```bash
 docker compose up -d
 ```
 
-Keycloak will be available at:
+Keycloak automatically imports:
+
+- realm `my-realm`
+- users (`user`, `admin`)
+- roles (`USER`, `ADMIN`)
+- client `spring-app`
+- protocol mappers (roles → access_token)
+
+Keycloak UI:
 
 ```
 http://localhost:8080
@@ -88,34 +97,11 @@ All credentials are provided dynamically by the client.
 +-------------+        +-------------------+        +----------------+
         |                       |                           |
         |  username/password    |                           |
-        |  client_id/secret     |                           |
+        |  clientId/secret      |                           |
         |---------------------->|                           |
         |                       |  /token, /logout          |
         |                       |-------------------------->|
         |                       |                           |
-```
-
-## Authentication flow
-
-```
-Client
-  |
-  | POST /auth/login
-  | { username, password, clientId, clientSecret }
-  v
-Spring Boot Proxy
-  |
-  | POST /realms/.../token
-  v
-Keycloak
-  |
-  | access_token + refresh_token
-  v
-Spring Boot Proxy
-  |
-  | returns tokens to client
-  v
-Client
 ```
 
 ---
@@ -123,7 +109,7 @@ Client
 # 🔐 API Endpoints
 
 ## 1. Login
-`POST /auth/login`
+`POST /api/auth/login`
 
 ```json
 {
@@ -138,17 +124,19 @@ Response:
 
 ```json
 {
-  "access_token": "...",
-  "refresh_token": "...",
-  "expires_in": 300,
-  "refresh_expires_in": 1800
+  "data": {
+    "access_token": "...",
+    "refresh_token": "...",
+    "expires_in": 300,
+    "refresh_expires_in": 1800
+  }
 }
 ```
 
 ---
 
 ## 2. Refresh Token
-`POST /auth/refresh`
+`POST /api/auth/refresh`
 
 ```json
 {
@@ -161,7 +149,7 @@ Response:
 ---
 
 ## 3. Logout
-`POST /auth/logout`
+`POST /api/auth/logout`
 
 ```json
 {
@@ -176,7 +164,7 @@ Response:
 # 🛡 Protected Endpoints
 
 ### `/api/user`
-Requires role: **USER**
+Requires role: **USER** or **ADMIN**
 
 ### `/api/admin`
 Requires role: **ADMIN**
@@ -190,60 +178,21 @@ Authorization: Bearer <access_token>
 
 ---
 
-# 🚦 Rate Limiting (Bucket4j, configuration‑only)
+# 🚦 Rate Limiting (Bucket4j)
 
-The project supports **fully configurable rate limiting** using  
-**Bucket4j Spring Boot Starter**, without any custom Java code.
+Rate limits are defined entirely in `application.properties`.
 
-Rate limits are defined entirely in `application.properties`, allowing you to:
-
-- limit any endpoint
-- set different limits per endpoint
-- configure limits per clientId, IP, or request expression
-- enable/disable rate limiting without code changes
-
-### 📌 Example: Limit `/auth/login` to 5 requests per minute
+### Example: Limit `/api/auth/login` to 5 requests per minute
 
 ```properties
 bucket4j.enabled=true
 
 bucket4j.filters[0].cache-name=rate-limit-cache
-bucket4j.filters[0].url=/auth/login
+bucket4j.filters[0].url=/api/auth/login
 bucket4j.filters[0].rate-limits[0].bandwidths[0].capacity=5
 bucket4j.filters[0].rate-limits[0].bandwidths[0].refill-capacity=5
 bucket4j.filters[0].rate-limits[0].bandwidths[0].refill-period=1m
 ```
-
-### 📌 Example: Limit `/api/admin` to 20 requests per minute
-
-```properties
-bucket4j.filters[1].cache-name=rate-limit-cache
-bucket4j.filters[1].url=/api/admin
-bucket4j.filters[1].rate-limits[0].bandwidths[0].capacity=20
-bucket4j.filters[1].rate-limits[0].bandwidths[0].refill-capacity=20
-bucket4j.filters[1].rate-limits[0].bandwidths[0].refill-period=1m
-```
-
-### 📌 Example: Rate limit based on clientId
-
-```properties
-bucket4j.filters[2].url=/auth/login
-bucket4j.filters[2].rate-limits[0].expression=clientId == 'spring-app'
-bucket4j.filters[2].rate-limits[0].bandwidths[0].capacity=3
-bucket4j.filters[2].rate-limits[0].bandwidths[0].refill-capacity=3
-bucket4j.filters[2].rate-limits[0].bandwidths[0].refill-period=1m
-```
-
-### ✔ No Java code required
-
-The starter automatically:
-
-- registers filters
-- applies Bucket4j rules
-- handles throttling responses
-- logs rate limit violations
-
-Your application stays clean and configuration‑driven.
 
 ---
 
@@ -257,6 +206,7 @@ Integration tests verify:
 - role-based access
 - JWT validation
 - Keycloak integration
+- protected endpoints (`/api/user`, `/api/admin`)
 
 Run:
 
@@ -269,115 +219,74 @@ mvn test
 # 🧱 Project Structure
 
 ```
-src/main/java
- └── lt/satsyuk
-      ├── auth
-      │    ├── AuthController.java
-      │    ├── KeycloakAuthService.java
-      │    ├── LoginRequest.java
-      │    ├── RefreshRequest.java
-      │    ├── LogoutRequest.java
-      │    └── KeycloakTokenResponse.java
-      ├── security
-      │    └── SecurityConfig.java
-      └── JwtDemoApplication.java
-
-src/test/java
- └── lt/satsyuk
-      └── KeycloakIntegrationIT.java
+C:.
+├── docker-compose.yaml
+├── pom.xml
+├── README.md
+├── keycloak/
+│   └── realm-export.json
+├── postman/
+│   └── My Collection.postman_collection.json
+└── src
+    ├── main
+    │   ├── java
+    │   │   └── lt
+    │   │       └── satsyuk
+    │   │           ├── MainApplication.java
+    │   │           ├── api
+    │   │           │   ├── AuthController.java
+    │   │           │   ├── DemoController.java
+    │   │           │   └── dto
+    │   │           │       └── ApiResponse.java
+    │   │           ├── auth
+    │   │           │   ├── JsonAuthEntryPoint.java
+    │   │           │   ├── KeycloakAuthService.java
+    │   │           │   ├── KeycloakProperties.java
+    │   │           │   └── dto
+    │   │           │       ├── KeycloakTokenResponse.java
+    │   │           │       ├── LoginRequest.java
+    │   │           │       ├── LogoutRequest.java
+    │   │           │       └── RefreshRequest.java
+    │   │           ├── config
+    │   │           │   ├── RestTemplateConfig.java
+    │   │           │   └── SecurityConfig.java
+    │   │           ├── exception
+    │   │           │   ├── GlobalExceptionHandler.java
+    │   │           │   └── KeycloakAuthException.java
+    │   │           └── security
+    │   │               └── KeycloakRoleConverter.java
+    │   └── resources
+    │       └── application.properties
+    └── test
+        └── java
+            └── lt
+                └── satsyuk
+                    └── api
+                        ├── integrationtest
+                        │   ├── KeycloakIntegrationIT.java
+                        │   └── TestSupport.java
+                        └── unittest
 ```
 
 ---
 
 # 🛠 Troubleshooting
 
-### ❌ `Could not resolve placeholder 'keycloak.token-url'`
-**Cause:** property missing or misnamed.  
-**Fix:** ensure:
-
-```properties
-keycloak.token-url=...
-```
-
----
-
-### ❌ `WebClient` not found
-Add dependency:
-
-```xml
-<dependency>
-    <groupId>org.springframework.boot</groupId>
-    <artifactId>spring-boot-starter-webflux</artifactId>
-</dependency>
-```
-
----
-
-### ❌ Lombok annotations not working
-Enable annotation processing:
-
-```
-Settings → Build → Compiler → Annotation Processors → Enable
-```
-
----
-
 ### ❌ 403 on `/api/user` or `/api/admin`
-Ensure Keycloak roles are inside:
+Ensure access_token contains:
 
 ```json
 "realm_access": { "roles": ["USER"] }
+"resource_access": { "spring-app": { "roles": ["USER"] } }
 ```
+
+If missing → check Keycloak mappers.
 
 ---
 
-# 🎨 Adding a Frontend
-
-Any frontend (React, Vue, Angular, mobile) can integrate easily.
-
-### Frontend responsibilities:
-
-1. Collect:
-   - username
-   - password
-   - clientId
-   - clientSecret
-
-2. Send them to `/auth/login`
-
-3. Store:
-   - access_token
-   - refresh_token
-
-4. Attach access_token to every request:
-
-```
-Authorization: Bearer <token>
-```
-
-5. Refresh token when needed
-6. Call `/auth/logout` on logout
-
-### Example (React)
-
-```js
-const login = async () => {
-  const res = await fetch("http://localhost:8081/auth/login", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      username,
-      password,
-      clientId: "spring-app",
-      clientSecret: "CHANGE_ME"
-    })
-  });
-
-  const tokens = await res.json();
-  localStorage.setItem("access", tokens.access_token);
-  localStorage.setItem("refresh", tokens.refresh_token);
-};
-```
+### ❌ Logout always returns 200
+Keycloak 26 **always** returns 200 for `/logout`, even for invalid tokens.  
+Your API wraps this into a structured error.
 
 ---
 

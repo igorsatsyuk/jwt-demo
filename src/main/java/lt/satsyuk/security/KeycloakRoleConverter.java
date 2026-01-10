@@ -13,21 +13,33 @@ public class KeycloakRoleConverter implements Converter<Jwt, Collection<GrantedA
 
     @Override
     public Collection<GrantedAuthority> convert(Jwt jwt) {
+
         Collection<GrantedAuthority> authorities = new ArrayList<>();
 
-        // Realm roles
+        // -----------------------------
+        // 1. Realm roles
+        // -----------------------------
         Map<String, Object> realmAccess = jwt.getClaim("realm_access");
-        if (realmAccess != null && realmAccess.containsKey("roles")) {
-            List<String> roles = (List<String>) realmAccess.get("roles");
-            roles.forEach(role -> authorities.add(new SimpleGrantedAuthority("ROLE_" + role)));
+        if (realmAccess != null) {
+            Object rolesObj = realmAccess.get("roles");
+            if (rolesObj instanceof List<?> roles) {
+                roles.forEach(r -> authorities.add(new SimpleGrantedAuthority("ROLE_" + r)));
+            }
         }
 
-        // Client roles (spring-app)
+        // -----------------------------
+        // 2. Client roles (resource_access.<client>.roles)
+        // -----------------------------
         Map<String, Object> resourceAccess = jwt.getClaim("resource_access");
-        if (resourceAccess != null && resourceAccess.containsKey("spring-app")) {
-            Map<String, Object> client = (Map<String, Object>) resourceAccess.get("spring-app");
-            List<String> roles = (List<String>) client.get("roles");
-            roles.forEach(role -> authorities.add(new SimpleGrantedAuthority("ROLE_" + role)));
+        if (resourceAccess != null) {
+            resourceAccess.forEach((client, access) -> {
+                if (access instanceof Map<?, ?> accessMap) {
+                    Object rolesObj = accessMap.get("roles");
+                    if (rolesObj instanceof List<?> roles) {
+                        roles.forEach(r -> authorities.add(new SimpleGrantedAuthority("ROLE_" + r)));
+                    }
+                }
+            });
         }
 
         return authorities;
