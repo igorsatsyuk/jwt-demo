@@ -1,4 +1,4 @@
-package lt.satsyuk.auth;
+package lt.satsyuk.auth.dto;
 
 public record LoginRequest(
         String username,

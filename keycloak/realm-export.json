@@ -1,44 +1,152 @@
 {
   "realm": "my-realm",
   "enabled": true,
-  "roles": {
-    "realm": [
-      { "name": "USER" },
-      { "name": "ADMIN" }
-    ]
-  },
-  "clients": [
+
+  "revokeRefreshToken": true,
+  "refreshTokenMaxReuse": 0,
+
+  "accessTokenLifespan": 300,
+  "ssoSessionIdleTimeout": 1800,
+  "ssoSessionMaxLifespan": 36000,
+
+  "offlineSessionIdleTimeout": 2592000,
+  "offlineSessionMaxLifespan": 5184000,
+  "offlineSessionMaxLifespanEnabled": true,
+
+  "requiredActions": [
     {
-      "clientId": "spring-app",
-      "secret": "vYbuDDmT4ouy6vBn6ZzaEPkmaMSHfvab",
-      "enabled": true,
-      "protocol": "openid-connect",
-      "publicClient": false,
-      "directAccessGrantsEnabled": true,
-      "standardFlowEnabled": false,
-      "fullScopeAllowed": true
+      "alias": "UPDATE_PASSWORD",
+      "enabled": false,
+      "defaultAction": false
+    },
+    {
+      "alias": "UPDATE_PROFILE",
+      "enabled": false,
+      "defaultAction": false
+    },
+    {
+      "alias": "VERIFY_EMAIL",
+      "enabled": false,
+      "defaultAction": false
+    },
+    {
+      "alias": "CONFIGURE_TOTP",
+      "enabled": false,
+      "defaultAction": false
     }
   ],
+
+  "roles": {
+    "realm": [
+      {
+        "name": "USER",
+        "description": "Basic user role"
+      },
+      {
+        "name": "ADMIN",
+        "description": "Administrator role"
+      },
+      {
+        "name": "offline_access",
+        "description": "Offline access role"
+      }
+    ]
+  },
+
   "users": [
     {
       "username": "user",
+      "email": "user@example.com",
       "enabled": true,
       "emailVerified": true,
-      "email": "user@example.com",
       "credentials": [
-        { "type": "password", "value": "password", "temporary": false }
+        {
+          "type": "password",
+          "value": "password",
+          "temporary": false
+        }
       ],
-      "realmRoles": ["USER"]
+      "realmRoles": ["USER", "offline_access"]
     },
     {
       "username": "admin",
+      "email": "admin@example.com",
       "enabled": true,
       "emailVerified": true,
-      "email": "admin@example.com",
       "credentials": [
-        { "type": "password", "value": "password", "temporary": false }
+        {
+          "type": "password",
+          "value": "admin",
+          "temporary": false
+        }
       ],
-      "realmRoles": ["ADMIN"]
+      "realmRoles": ["ADMIN", "offline_access"]
+    }
+  ],
+
+  "clients": [
+    {
+      "clientId": "spring-app",
+      "enabled": true,
+      "protocol": "openid-connect",
+
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "vYbuDDmT4ouy6vBn6ZzaEPkmaMSHfvab",
+
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": false,
+      "implicitFlowEnabled": false,
+
+      "attributes": {
+        "oauth2.device.authorization.grant.enabled": "false",
+        "token.exchange.enabled": "false",
+        "backchannel.logout.session.required": "false",
+        "backchannel.logout.revoke.offline.tokens": "false"
+      },
+
+      "redirectUris": [],
+      "webOrigins": [],
+
+      "defaultClientScopes": [
+        "roles",
+        "profile",
+        "email",
+        "offline_access"
+      ],
+      "optionalClientScopes": []
+    }
+  ],
+
+  "clientScopes": [
+    {
+      "name": "roles",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true"
+      }
+    },
+    {
+      "name": "profile",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true"
+      }
+    },
+    {
+      "name": "email",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true"
+      }
+    },
+    {
+      "name": "offline_access",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true"
+      }
     }
   ]
 }

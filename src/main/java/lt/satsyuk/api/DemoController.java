@@ -1,5 +1,6 @@
 package lt.satsyuk.api;
 
+import lt.satsyuk.api.dto.ApiResponse;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
@@ -9,13 +10,13 @@ public class DemoController {
 
     @GetMapping("/user")
     @PreAuthorize("hasAuthority('USER')")
-    public String user() {
-        return "user endpoint";
+    public ApiResponse<String> user() {
+        return ApiResponse.ok("user endpoint");
     }
 
     @GetMapping("/admin")
     @PreAuthorize("hasAuthority('ADMIN')")
-    public String admin() {
-        return "admin endpoint";
+    public ApiResponse<String> admin() {
+        return ApiResponse.ok("admin endpoint");
     }
 }

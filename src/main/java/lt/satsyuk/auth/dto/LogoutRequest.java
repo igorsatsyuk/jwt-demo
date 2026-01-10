@@ -1,6 +1,6 @@
-package lt.satsyuk.auth;
+package lt.satsyuk.auth.dto;
 
-public record RefreshRequest(
+public record LogoutRequest(
         String refreshToken,
         String clientId,
         String clientSecret
