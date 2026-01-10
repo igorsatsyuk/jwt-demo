@@ -106,6 +106,182 @@ All credentials are provided dynamically by the client.
 
 ---
 
+# 🛡 Security Architecture
+
+The project uses a **clean, layered security architecture** combining:
+
+- Keycloak for authentication and role assignment
+- Spring Security for JWT validation
+- Method-level authorization via `@PreAuthorize`
+- A custom `KeycloakRoleConverter` for mapping Keycloak roles to Spring authorities
+
+This ensures a clear separation of responsibilities:
+
+| Layer | Responsibility |
+|-------|----------------|
+| **Keycloak** | Authentication, issuing tokens, storing users, roles, and mappers |
+| **Spring Security** | Validating JWT, extracting authorities, enforcing access rules |
+| **Controllers** | Declaring authorization rules via annotations |
+
+---
+
+## 🔐 Authentication Flow
+
+1. Client sends username/password + clientId/clientSecret to `/api/auth/login`
+2. Backend forwards credentials to Keycloak `/token`
+3. Keycloak returns:
+    - access_token
+    - refresh_token
+4. Backend returns tokens to the client
+5. Client uses access_token for all protected endpoints
+
+---
+
+## 📊 Sequence Diagram (Login / Refresh / Logout)
+
+```text
+===========================================================
+                 LOGIN FLOW
+===========================================================
+
+Client
+  |
+  | 1. POST /api/auth/login
+  |    { username, password, clientId, clientSecret }
+  v
+Spring Boot (AuthController)
+  |
+  | 2. KeycloakAuthService.login()
+  v
+Keycloak
+  |
+  | 3. POST /realms/my-realm/protocol/openid-connect/token
+  |      grant_type=password
+  |      username, password
+  |      client_id, client_secret
+  |
+  | 4. 200 OK
+  |      { access_token, refresh_token }
+  v
+Spring Boot
+  |
+  | 5. Wrap into ApiResponse
+  v
+Client
+
+
+===========================================================
+                 REFRESH FLOW
+===========================================================
+
+Client
+  |
+  | 1. POST /api/auth/refresh
+  |    { refreshToken, clientId, clientSecret }
+  v
+Spring Boot
+  |
+  | 2. KeycloakAuthService.refresh()
+  v
+Keycloak
+  |
+  | 3. POST /realms/my-realm/protocol/openid-connect/token
+  |      grant_type=refresh_token
+  |      refresh_token
+  |      client_id, client_secret
+  |
+  | 4. 200 OK
+  |      { new_access_token, new_refresh_token }
+  v
+Spring Boot
+  |
+  | 5. Wrap into ApiResponse
+  v
+Client
+
+
+===========================================================
+                 LOGOUT FLOW
+===========================================================
+
+Client
+  |
+  | 1. POST /api/auth/logout
+  |    { refreshToken, clientId, clientSecret }
+  v
+Spring Boot
+  |
+  | 2. KeycloakAuthService.logout()
+  v
+Keycloak
+  |
+  | 3. POST /realms/my-realm/protocol/openid-connect/logout
+  |      client_id, client_secret
+  |      refresh_token
+  |
+  | 4. 200 OK (always)
+  v
+Spring Boot
+  |
+  | 5. Return ApiResponse(success=true)
+  v
+Client
+```
+
+---
+
+# 🎭 Role Model
+
+## Roles in Keycloak
+
+| Role  | Description |
+|-------|-------------|
+| `USER`  | Standard application user |
+| `ADMIN` | Administrative user |
+
+Assignments:
+
+- `user` → USER
+- `admin` → ADMIN
+
+---
+
+## Role Mapping
+
+Keycloak → Spring Security:
+
+```
+USER  → ROLE_USER  
+ADMIN → ROLE_ADMIN
+```
+
+---
+
+## Access Matrix
+
+| User     | `/api/user` | `/api/admin` |
+|----------|-------------|--------------|
+| user     | ✅ Allowed   | ❌ Forbidden |
+| admin    | ❌ Forbidden | ✅ Allowed   |
+
+---
+
+## Extending the Model
+
+To add new roles:
+
+1. Create a realm role in Keycloak
+2. Assign it to users
+3. Protect endpoints:
+
+```java
+@PreAuthorize("hasRole('MANAGER')")
+```
+
+No changes required in SecurityConfig.
+
+---
+
 # 🔐 API Endpoints
 
 ## 1. Login
@@ -120,19 +296,6 @@ All credentials are provided dynamically by the client.
 }
 ```
 
-Response:
-
-```json
-{
-  "data": {
-    "access_token": "...",
-    "refresh_token": "...",
-    "expires_in": 300,
-    "refresh_expires_in": 1800
-  }
-}
-```
-
 ---
 
 ## 2. Refresh Token
@@ -140,7 +303,7 @@ Response:
 
 ```json
 {
-  "refreshToken": "eyJhbGciOi...",
+  "refreshToken": "...",
   "clientId": "spring-app",
   "clientSecret": "CHANGE_ME"
 }
@@ -153,7 +316,7 @@ Response:
 
 ```json
 {
-  "refreshToken": "eyJhbGciOi...",
+  "refreshToken": "...",
   "clientId": "spring-app",
   "clientSecret": "CHANGE_ME"
 }
@@ -164,17 +327,10 @@ Response:
 # 🛡 Protected Endpoints
 
 ### `/api/user`
-Requires role: **USER** or **ADMIN**
+Requires: `ROLE_USER`
 
 ### `/api/admin`
-Requires role: **ADMIN**
-
-Example:
-
-```
-GET /api/user
-Authorization: Bearer <access_token>
-```
+Requires: `ROLE_ADMIN`
 
 ---
 
@@ -182,15 +338,11 @@ Authorization: Bearer <access_token>
 
 Rate limits are defined entirely in `application.properties`.
 
-### Example: Limit `/api/auth/login` to 5 requests per minute
+Example:
 
 ```properties
-bucket4j.enabled=true
-
-bucket4j.filters[0].cache-name=rate-limit-cache
 bucket4j.filters[0].url=/api/auth/login
 bucket4j.filters[0].rate-limits[0].bandwidths[0].capacity=5
-bucket4j.filters[0].rate-limits[0].bandwidths[0].refill-capacity=5
 bucket4j.filters[0].rate-limits[0].bandwidths[0].refill-period=1m
 ```
 
@@ -206,7 +358,7 @@ Integration tests verify:
 - role-based access
 - JWT validation
 - Keycloak integration
-- protected endpoints (`/api/user`, `/api/admin`)
+- protected endpoints
 
 Run:
 
@@ -273,11 +425,10 @@ C:.
 # 🛠 Troubleshooting
 
 ### ❌ 403 on `/api/user` or `/api/admin`
-Ensure access_token contains:
+Check token contains:
 
 ```json
 "realm_access": { "roles": ["USER"] }
-"resource_access": { "spring-app": { "roles": ["USER"] } }
 ```
 
 If missing → check Keycloak mappers.
@@ -285,8 +436,8 @@ If missing → check Keycloak mappers.
 ---
 
 ### ❌ Logout always returns 200
-Keycloak 26 **always** returns 200 for `/logout`, even for invalid tokens.  
-Your API wraps this into a structured error.
+Keycloak 26 always returns 200 for `/logout`.  
+Your API wraps this into a structured response.
 
 ---
 
