@@ -9,13 +9,13 @@ import org.springframework.web.bind.annotation.*;
 public class DemoController {
 
     @GetMapping("/user")
-    @PreAuthorize("hasAuthority('USER')")
+    @PreAuthorize("hasRole('USER')")
     public ApiResponse<String> user() {
         return ApiResponse.ok("user endpoint");
     }
 
     @GetMapping("/admin")
-    @PreAuthorize("hasAuthority('ADMIN')")
+    @PreAuthorize("hasRole('ADMIN')")
     public ApiResponse<String> admin() {
         return ApiResponse.ok("admin endpoint");
     }

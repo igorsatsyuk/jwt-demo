@@ -45,13 +45,13 @@ public class KeycloakIntegrationIT {
 
     @BeforeEach
     void setUp() {
-        String mainUrl = "http://localhost:" + port + "/api/auth";
-        loginUrl = mainUrl + "/login";
-        refreshUrl = mainUrl + "/refresh";
-        logoutUrl = mainUrl + "/logout";
+        String mainUrl = "http://localhost:" + port + "/api";
+        loginUrl = mainUrl + "/auth/login";
+        refreshUrl = mainUrl + "/auth/refresh";
+        logoutUrl = mainUrl + "/auth/logout";
 
-        userUrl = "http://localhost:" + port + "/api/user";
-        adminUrl = "http://localhost:" + port + "/api/admin";
+        userUrl = mainUrl + "/user";
+        adminUrl = mainUrl + "/admin";
     }
 
     // ------------------------------------------------------------
@@ -384,7 +384,7 @@ public class KeycloakIntegrationIT {
     }
 
     @Test
-    void admin_can_access_user_resource() {
+    void admin_cannot_access_user_resource() {
         String token = loginAndGetAccess(ADMIN, ADMIN_PASSWORD);
 
         HttpHeaders headers = new HttpHeaders();
@@ -397,7 +397,7 @@ public class KeycloakIntegrationIT {
                 String.class
         );
 
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
     }
 
     // ------------------------------------------------------------
