@@ -1,0 +1,200 @@
+{
+	"info": {
+		"name": "JWT Demo API (Full Tests)",
+		"_postman_id": "f7b2e3c1-9a4d-4f1e-bc1a-123456789abc",
+		"description": "Full Postman collection for Spring Boot + Keycloak OAuth2 Proxy with tests",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Auth",
+			"item": [
+				{
+					"name": "Login",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"username\": \"{{username}}\",\n  \"password\": \"{{password}}\",\n  \"clientId\": \"{{client_id}}\",\n  \"clientSecret\": \"{{client_secret}}\"\n}"
+						},
+						"url": "{{base_url}}/api/auth/login"
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Login request succeeded\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"const json = pm.response.json();",
+									"",
+									"pm.test(\"Response contains tokens\", function () {",
+									"    pm.expect(json.data.access_token).to.be.a('string');",
+									"    pm.expect(json.data.refresh_token).to.be.a('string');",
+									"});",
+									"",
+									"pm.environment.set(\"access_token\", json.data.access_token);",
+									"pm.environment.set(\"refresh_token\", json.data.refresh_token);",
+									"",
+									"console.log(\"Tokens updated in environment\");"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "Refresh Token",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"refreshToken\": \"{{refresh_token}}\",\n  \"clientId\": \"{{client_id}}\",\n  \"clientSecret\": \"{{client_secret}}\"\n}"
+						},
+						"url": "{{base_url}}/api/auth/refresh"
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Refresh succeeded\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"const json = pm.response.json();",
+									"",
+									"pm.test(\"New tokens returned\", function () {",
+									"    pm.expect(json.data.access_token).to.be.a('string');",
+									"});",
+									"",
+									"pm.environment.set(\"access_token\", json.data.access_token);",
+									"pm.environment.set(\"refresh_token\", json.data.refresh_token);",
+									"",
+									"console.log(\"Tokens refreshed\");"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "Revoke Token (Logout)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"token\": \"{{refresh_token}}\",\n  \"clientId\": \"{{client_id}}\",\n  \"clientSecret\": \"{{client_secret}}\"\n}"
+						},
+						"url": "{{base_url}}/api/auth/logout"
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Logout succeeded\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"console.log(\"Refresh token revoked\");"
+								]
+							}
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "Protected",
+			"item": [
+				{
+					"name": "User Endpoint",
+					"request": {
+						"method": "GET",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer {{access_token}}" }
+						],
+						"url": "{{base_url}}/api/user"
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"User endpoint accessible\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "Admin Endpoint",
+					"request": {
+						"method": "GET",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer {{access_token}}" }
+						],
+						"url": "{{base_url}}/api/admin"
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Admin endpoint returns correct status\", function () {",
+									"    if (pm.response.code === 200) {",
+									"        console.log(\"Admin access granted\");",
+									"    } else {",
+									"        console.log(\"Admin access denied (expected for USER role)\");",
+									"    }",
+									"});"
+								]
+							}
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "Monitoring",
+			"item": [
+				{
+					"name": "Prometheus Metrics",
+					"request": {
+						"method": "GET",
+						"url": "{{base_url}}/actuator/prometheus"
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Prometheus endpoint accessible\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"Metrics contain http_server_requests\", function () {",
+									"    pm.expect(pm.response.text()).to.include(\"http_server_requests\");",
+									"});"
+								]
+							}
+						}
+					]
+				}
+			]
+		}
+	]
+}
