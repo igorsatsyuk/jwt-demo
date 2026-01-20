@@ -1,7 +1,9 @@
-package lt.satsyuk.auth;
+package lt.satsyuk.api;
 
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lt.satsyuk.api.dto.ApiResponse;
+import lt.satsyuk.auth.KeycloakAuthService;
 import lt.satsyuk.auth.dto.KeycloakTokenResponse;
 import lt.satsyuk.auth.dto.LoginRequest;
 import lt.satsyuk.auth.dto.LogoutRequest;
@@ -19,7 +21,7 @@ public class AuthController {
     private final KeycloakAuthService authService;
 
     @PostMapping("/login")
-    public ResponseEntity<ApiResponse<?>> login(@RequestBody LoginRequest req) {
+    public ResponseEntity<ApiResponse<?>> login(@Valid @RequestBody LoginRequest req) {
         try {
             KeycloakTokenResponse tokens = authService.login(req);
             return ResponseEntity.ok(ApiResponse.ok(tokens));
@@ -31,7 +33,7 @@ public class AuthController {
     }
 
     @PostMapping("/refresh")
-    public ResponseEntity<ApiResponse<?>> refresh(@RequestBody RefreshRequest req) {
+    public ResponseEntity<ApiResponse<?>> refresh(@Valid @RequestBody RefreshRequest req) {
         try {
             KeycloakTokenResponse tokens = authService.refresh(req);
             return ResponseEntity.ok(ApiResponse.ok(tokens));
@@ -44,7 +46,7 @@ public class AuthController {
 
     // Keycloak 26 revoke: 200 OK даже при ошибке → мы тоже отвечаем 200
     @PostMapping("/logout")
-    public ResponseEntity<ApiResponse<?>> logout(@RequestBody LogoutRequest req) {
+    public ResponseEntity<ApiResponse<?>> logout(@Valid @RequestBody LogoutRequest req) {
         try {
             authService.logout(req);
             return ResponseEntity.ok(ApiResponse.ok(null));

@@ -229,7 +229,7 @@ public class KeycloakIntegrationIT {
 
         HttpEntity<Map<String, String>> entity =
                 new HttpEntity<>(Map.of(
-                        "refresh_token", "invalid-token",
+                        "refreshToken", "invalid-token",
                         "clientId", props.getClientId(),
                         "clientSecret", props.getClientSecret()
                 ), headers);
@@ -278,7 +278,7 @@ public class KeycloakIntegrationIT {
 
         HttpEntity<Map<String, String>> logoutEntity =
                 new HttpEntity<>(Map.of(
-                        "refresh_token", refreshToken,
+                        "refreshToken", refreshToken,
                         "clientId", props.getClientId(),
                         "clientSecret", props.getClientSecret()
                 ), headers);
@@ -300,7 +300,7 @@ public class KeycloakIntegrationIT {
 
         HttpEntity<Map<String, String>> entity =
                 new HttpEntity<>(Map.of(
-                        "refresh_token", "invalid-token",
+                        "refreshToken", "invalid-token",
                         "clientId", props.getClientId(),
                         "clientSecret", props.getClientSecret()
                 ), headers);
