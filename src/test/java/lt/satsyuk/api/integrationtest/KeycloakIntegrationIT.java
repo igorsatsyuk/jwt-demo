@@ -7,9 +7,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.boot.test.web.server.LocalServerPort;
-import org.springframework.http.MediaType;
-import org.springframework.test.web.reactive.server.WebTestClient;
+import org.springframework.http.*;
 
 import java.util.Map;
 
@@ -24,10 +24,17 @@ public class KeycloakIntegrationIT {
     @Autowired
     private KeycloakProperties props;
 
+    private static final String USERNAME = "user";
+    private static final String USER_PASSWORD = "password";
+
+    private static final String ADMIN = "admin";
+    private static final String ADMIN_PASSWORD = "admin";
+
     @LocalServerPort
     private int port;
 
-    private WebTestClient webTestClient;
+    @Autowired
+    private TestRestTemplate restTemplate;
 
     private String loginUrl;
     private String refreshUrl;
@@ -36,21 +43,9 @@ public class KeycloakIntegrationIT {
     private String userUrl;
     private String adminUrl;
 
-    private static final String USERNAME = "user";
-    private static final String USER_PASSWORD = "password";
-
-    private static final String ADMIN = "admin";
-    private static final String ADMIN_PASSWORD = "admin";
-
     @BeforeEach
     void setUp() {
-        String baseUrl = "http://localhost:" + port;
-
-        this.webTestClient = WebTestClient.bindToServer()
-                .baseUrl(baseUrl)
-                .build();
-
-        String mainUrl = baseUrl + "/api";
+        String mainUrl = "http://localhost:" + port + "/api";
         loginUrl = mainUrl + "/auth/login";
         refreshUrl = mainUrl + "/auth/refresh";
         logoutUrl = mainUrl + "/auth/logout";
@@ -72,17 +67,23 @@ public class KeycloakIntegrationIT {
                 props.getClientSecret()
         );
 
-        Map<String, Object> body = webTestClient.post()
-                .uri(loginUrl)
-                .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(request)
-                .exchange()
-                .expectStatus().isOk()
-                .expectBody(Map.class)
-                .returnResult()
-                .getResponseBody();
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
 
+        HttpEntity<LoginRequest> entity = new HttpEntity<>(request, headers);
+
+        ResponseEntity<Map> response = restTemplate.exchange(
+                loginUrl,
+                HttpMethod.POST,
+                entity,
+                Map.class
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+
+        Map<String, Object> body = response.getBody();
         Map<String, Object> data = (Map<String, Object>) body.get("data");
+
         assertThat(data).containsKeys("access_token", "refresh_token");
     }
 
@@ -95,12 +96,19 @@ public class KeycloakIntegrationIT {
                 props.getClientSecret()
         );
 
-        webTestClient.post()
-                .uri(loginUrl)
-                .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(request)
-                .exchange()
-                .expectStatus().isUnauthorized();
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+
+        HttpEntity<LoginRequest> entity = new HttpEntity<>(request, headers);
+
+        ResponseEntity<Map> response = restTemplate.exchange(
+                loginUrl,
+                HttpMethod.POST,
+                entity,
+                Map.class
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
     }
 
     @Test
@@ -112,12 +120,19 @@ public class KeycloakIntegrationIT {
                 props.getClientSecret()
         );
 
-        webTestClient.post()
-                .uri(loginUrl)
-                .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(request)
-                .exchange()
-                .expectStatus().isUnauthorized();
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+
+        HttpEntity<LoginRequest> entity = new HttpEntity<>(request, headers);
+
+        ResponseEntity<Map> response = restTemplate.exchange(
+                loginUrl,
+                HttpMethod.POST,
+                entity,
+                Map.class
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
     }
 
     // ------------------------------------------------------------
@@ -133,17 +148,23 @@ public class KeycloakIntegrationIT {
                 props.getClientSecret()
         );
 
-        Map<String, Object> body = webTestClient.post()
-                .uri(loginUrl)
-                .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(request)
-                .exchange()
-                .expectStatus().isOk()
-                .expectBody(Map.class)
-                .returnResult()
-                .getResponseBody();
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
 
+        HttpEntity<LoginRequest> entity = new HttpEntity<>(request, headers);
+
+        ResponseEntity<Map> response = restTemplate.exchange(
+                loginUrl,
+                HttpMethod.POST,
+                entity,
+                Map.class
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+
+        Map<String, Object> body = response.getBody();
         Map<String, Object> data = (Map<String, Object>) body.get("data");
+
         assertThat(data).containsKeys("access_token", "refresh_token");
     }
 
@@ -153,38 +174,74 @@ public class KeycloakIntegrationIT {
 
     @Test
     void refresh_success() {
-        String refreshToken = loginAndGetRefresh(USERNAME, USER_PASSWORD);
+        LoginRequest request = new LoginRequest(
+                USERNAME,
+                USER_PASSWORD,
+                props.getClientId(),
+                props.getClientSecret()
+        );
 
-        Map<String, Object> body = webTestClient.post()
-                .uri(refreshUrl)
-                .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(Map.of(
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+
+        HttpEntity<LoginRequest> loginEntity = new HttpEntity<>(request, headers);
+
+        ResponseEntity<Map> loginResponse = restTemplate.exchange(
+                loginUrl,
+                HttpMethod.POST,
+                loginEntity,
+                Map.class
+        );
+
+        assertThat(loginResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
+
+        Map<String, Object> loginBody = loginResponse.getBody();
+        Map<String, Object> loginData = (Map<String, Object>) loginBody.get("data");
+
+        String refreshToken = (String) loginData.get("refresh_token");
+
+        HttpEntity<Map<String, String>> refreshEntity =
+                new HttpEntity<>(Map.of(
                         "refreshToken", refreshToken,
                         "clientId", props.getClientId(),
                         "clientSecret", props.getClientSecret()
-                ))
-                .exchange()
-                .expectStatus().isOk()
-                .expectBody(Map.class)
-                .returnResult()
-                .getResponseBody();
+                ), headers);
 
-        Map<String, Object> data = (Map<String, Object>) body.get("data");
-        assertThat(data).containsKey("access_token");
+        ResponseEntity<Map> refreshResponse = restTemplate.exchange(
+                refreshUrl,
+                HttpMethod.POST,
+                refreshEntity,
+                Map.class
+        );
+
+        assertThat(refreshResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
+
+        Map<String, Object> refreshBody = refreshResponse.getBody();
+        Map<String, Object> refreshData = (Map<String, Object>) refreshBody.get("data");
+
+        assertThat(refreshData).containsKeys("access_token");
     }
 
     @Test
     void refresh_wrong_token() {
-        webTestClient.post()
-                .uri(refreshUrl)
-                .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(Map.of(
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+
+        HttpEntity<Map<String, String>> entity =
+                new HttpEntity<>(Map.of(
                         "refresh_token", "invalid-token",
                         "clientId", props.getClientId(),
                         "clientSecret", props.getClientSecret()
-                ))
-                .exchange()
-                .expectStatus().isUnauthorized();
+                ), headers);
+
+        ResponseEntity<Map> response = restTemplate.exchange(
+                refreshUrl,
+                HttpMethod.POST,
+                entity,
+                Map.class
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
     }
 
     // ------------------------------------------------------------
@@ -193,38 +250,76 @@ public class KeycloakIntegrationIT {
 
     @Test
     void logout_success() {
-        String refreshToken = loginAndGetRefresh(USERNAME, USER_PASSWORD);
+        LoginRequest request = new LoginRequest(
+                USERNAME,
+                USER_PASSWORD,
+                props.getClientId(),
+                props.getClientSecret()
+        );
 
-        webTestClient.post()
-                .uri(logoutUrl)
-                .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(Map.of(
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+
+        HttpEntity<LoginRequest> loginEntity = new HttpEntity<>(request, headers);
+
+        ResponseEntity<Map> loginResponse = restTemplate.exchange(
+                loginUrl,
+                HttpMethod.POST,
+                loginEntity,
+                Map.class
+        );
+
+        assertThat(loginResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
+
+        Map<String, Object> loginBody = loginResponse.getBody();
+        Map<String, Object> loginData = (Map<String, Object>) loginBody.get("data");
+
+        String refreshToken = (String) loginData.get("refresh_token");
+
+        HttpEntity<Map<String, String>> logoutEntity =
+                new HttpEntity<>(Map.of(
                         "refresh_token", refreshToken,
                         "clientId", props.getClientId(),
                         "clientSecret", props.getClientSecret()
-                ))
-                .exchange()
-                .expectStatus().isOk();
+                ), headers);
+
+        ResponseEntity<Map> logoutResponse = restTemplate.exchange(
+                logoutUrl,
+                HttpMethod.POST,
+                logoutEntity,
+                Map.class
+        );
+
+        assertThat(logoutResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
     }
 
     @Test
     void logout_wrong_token() {
-        Map<String, Object> body = webTestClient.post()
-                .uri(logoutUrl)
-                .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(Map.of(
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+
+        HttpEntity<Map<String, String>> entity =
+                new HttpEntity<>(Map.of(
                         "refresh_token", "invalid-token",
                         "clientId", props.getClientId(),
                         "clientSecret", props.getClientSecret()
-                ))
-                .exchange()
-                .expectStatus().isOk()
-                .expectBody(Map.class)
-                .returnResult()
-                .getResponseBody();
+                ), headers);
+
+        ResponseEntity<Map> response = restTemplate.exchange(
+                logoutUrl,
+                HttpMethod.POST,
+                entity,
+                Map.class
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+
+        Map<String, Object> body = response.getBody();
 
         assertThat(body.get("data")).isNull();
-        assertThat((String) body.get("message")).contains("invalid_token");
+
+        String message = (String) body.get("message");
+        assertThat(message).contains("invalid_token");
     }
 
     // ------------------------------------------------------------
@@ -233,54 +328,76 @@ public class KeycloakIntegrationIT {
 
     @Test
     void access_protected_without_token_unauthorized() {
-        webTestClient.get()
-                .uri(adminUrl)
-                .exchange()
-                .expectStatus().isUnauthorized();
+        ResponseEntity<String> response = restTemplate.getForEntity(adminUrl, String.class);
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
     }
 
     @Test
     void user_cannot_access_admin_forbidden() {
         String token = loginAndGetAccess(USERNAME, USER_PASSWORD);
 
-        webTestClient.get()
-                .uri(adminUrl)
-                .headers(h -> h.setBearerAuth(token))
-                .exchange()
-                .expectStatus().isForbidden();
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(token);
+
+        ResponseEntity<String> response = restTemplate.exchange(
+                adminUrl,
+                HttpMethod.GET,
+                new HttpEntity<>(headers),
+                String.class
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
     }
 
     @Test
     void admin_can_access_admin() {
         String token = loginAndGetAccess(ADMIN, ADMIN_PASSWORD);
 
-        webTestClient.get()
-                .uri(adminUrl)
-                .headers(h -> h.setBearerAuth(token))
-                .exchange()
-                .expectStatus().isOk();
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(token);
+
+        ResponseEntity<String> response = restTemplate.exchange(
+                adminUrl,
+                HttpMethod.GET,
+                new HttpEntity<>(headers),
+                String.class
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
     }
 
     @Test
     void user_can_access_user_resource() {
         String token = loginAndGetAccess(USERNAME, USER_PASSWORD);
 
-        webTestClient.get()
-                .uri(userUrl)
-                .headers(h -> h.setBearerAuth(token))
-                .exchange()
-                .expectStatus().isOk();
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(token);
+
+        ResponseEntity<String> response = restTemplate.exchange(
+                userUrl,
+                HttpMethod.GET,
+                new HttpEntity<>(headers),
+                String.class
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
     }
 
     @Test
     void admin_cannot_access_user_resource() {
         String token = loginAndGetAccess(ADMIN, ADMIN_PASSWORD);
 
-        webTestClient.get()
-                .uri(userUrl)
-                .headers(h -> h.setBearerAuth(token))
-                .exchange()
-                .expectStatus().isForbidden();
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(token);
+
+        ResponseEntity<String> response = restTemplate.exchange(
+                userUrl,
+                HttpMethod.GET,
+                new HttpEntity<>(headers),
+                String.class
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
     }
 
     // ------------------------------------------------------------
@@ -288,18 +405,6 @@ public class KeycloakIntegrationIT {
     // ------------------------------------------------------------
 
     private String loginAndGetAccess(String username, String password) {
-        Map<String, Object> body = login(username, password);
-        Map<String, Object> data = (Map<String, Object>) body.get("data");
-        return (String) data.get("access_token");
-    }
-
-    private String loginAndGetRefresh(String username, String password) {
-        Map<String, Object> body = login(username, password);
-        Map<String, Object> data = (Map<String, Object>) body.get("data");
-        return (String) data.get("refresh_token");
-    }
-
-    private Map<String, Object> login(String username, String password) {
         LoginRequest request = new LoginRequest(
                 username,
                 password,
@@ -307,13 +412,21 @@ public class KeycloakIntegrationIT {
                 props.getClientSecret()
         );
 
-        return webTestClient.post()
-                .uri(loginUrl)
-                .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(request)
-                .exchange()
-                .expectBody(Map.class)
-                .returnResult()
-                .getResponseBody();
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+
+        HttpEntity<LoginRequest> entity = new HttpEntity<>(request, headers);
+
+        ResponseEntity<Map> response = restTemplate.exchange(
+                loginUrl,
+                HttpMethod.POST,
+                entity,
+                Map.class
+        );
+
+        Map<String, Object> body = response.getBody();
+        Map<String, Object> data = (Map<String, Object>) body.get("data");
+
+        return (String) data.get("access_token");
     }
 }

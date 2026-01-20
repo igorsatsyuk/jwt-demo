@@ -11,8 +11,8 @@
     <packaging>jar</packaging>
 
     <properties>
-        <java.version>21</java.version>
-        <spring.boot.version>4.0.0</spring.boot.version>
+        <java.version>17</java.version>
+        <spring.boot.version>3.2.0</spring.boot.version>
         <lombok.version>1.18.32</lombok.version>
     </properties>
 
@@ -29,16 +29,11 @@
     </dependencyManagement>
 
     <dependencies>
+
         <!-- Web -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
-        </dependency>
-
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-webflux</artifactId>
-            <scope>test</scope>
         </dependency>
 
         <!-- Security + JWT Resource Server (нужно для SecurityConfig) -->
@@ -57,23 +52,18 @@
             <artifactId>spring-security-oauth2-jose</artifactId>
         </dependency>
 
+        <!-- Rate limiting -->
+        <dependency>
+            <groupId>com.giffing.bucket4j.spring.boot.starter</groupId>
+            <artifactId>bucket4j-spring-boot-starter</artifactId>
+            <version>0.10.0</version>
+        </dependency>
+
         <!-- HttpClient 5 (негативные тесты) -->
         <dependency>
             <groupId>org.apache.httpcomponents.client5</groupId>
             <artifactId>httpclient5</artifactId>
             <version>5.2.1</version>
-        </dependency>
-
-        <!-- OpenTelemetry (Spring Boot 4 built‑in) -->
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-opentelemetry</artifactId>
-        </dependency>
-
-        <!-- OTel exporter (OTLP → Collector/Tempo/Jaeger) -->
-        <dependency>
-             <groupId>io.opentelemetry</groupId>
-             <artifactId>opentelemetry-exporter-otlp</artifactId>
         </dependency>
 
         <!-- Micrometer + Prometheus -->
@@ -109,20 +99,6 @@
             </exclusions>
         </dependency>
 
-        <!-- Mockito inline mock maker (чтобы убрать предупреждение) -->
-        <dependency>
-            <groupId>org.mockito</groupId>
-            <artifactId>mockito-inline</artifactId>
-            <version>5.2.0</version>
-            <scope>test</scope>
-        </dependency>
-
-        <!-- Logback JSON encoder -->
-        <dependency>
-            <groupId>net.logstash.logback</groupId>
-            <artifactId>logstash-logback-encoder</artifactId>
-            <version>7.4</version>
-        </dependency>
     </dependencies>
 
     <build>
