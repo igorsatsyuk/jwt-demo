@@ -4,6 +4,7 @@ target/
 !**/src/test/**/target/
 .kotlin
 .idea/
+/.output.txt
 
 *.iws
 *.iml
