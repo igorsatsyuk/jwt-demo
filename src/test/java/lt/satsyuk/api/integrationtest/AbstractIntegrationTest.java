@@ -1,31 +1,22 @@
 package lt.satsyuk.api.integrationtest;
 
 import dasniko.testcontainers.keycloak.KeycloakContainer;
+import org.junit.jupiter.api.BeforeAll;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
+
 public abstract class AbstractIntegrationTest {
 
-    static KeycloakContainer keycloak;
+    static KeycloakContainer keycloak = TestKeycloakContainer.getInstance();
 
-    static {
-        if (System.getenv("DOCKER_HOST") != null || System.getenv("DOCKER_SOCK") != null || isDockerAvailable()) {
-            try {
-                keycloak = new KeycloakContainer("quay.io/keycloak/keycloak:26.0.0")
-                        .withRealmImportFile("keycloak/realm-export.json");
-                keycloak.start();
-            } catch (Exception e) {
-                System.err.println("Failed to start KeycloakContainer: " + e.getMessage());
-            }
-        }
-    }
-
-    private static boolean isDockerAvailable() {
+    @BeforeAll
+    static void checkDockerAvailable() {
         try {
-            Process process = Runtime.getRuntime().exec("docker ps");
-            return process.waitFor() == 0;
+            assumeTrue(keycloak.isRunning(), "Keycloak container should be running");
         } catch (Exception e) {
-            return false;
+            assumeTrue(false, "Docker is not available. Please install Docker Desktop for Windows and ensure it's running.");
         }
     }
 
