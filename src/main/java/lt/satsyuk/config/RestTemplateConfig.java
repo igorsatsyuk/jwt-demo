@@ -11,6 +11,6 @@ public class RestTemplateConfig {
 
     @Bean
     public RestTemplate restTemplate(RestTemplateBuilder builder, ObservationRestTemplateCustomizer customizer) {
-        return customizer.customize(builder).build();
+        return builder.additionalCustomizers(customizer).build();
     }
 }
