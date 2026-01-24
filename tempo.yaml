@@ -5,11 +5,24 @@ distributor:
   receivers:
     otlp:
       protocols:
-        http:
         grpc:
+        http:
+
+ingester:
+  max_block_duration: 5m
+
+compactor:
+  compaction:
+    block_retention: 1h
 
 storage:
   trace:
     backend: local
+    wal:
+      path: /tmp/tempo/wal
     local:
-      path: /tmp/tempo
+      path: /tmp/tempo/blocks
+
+query_frontend:
+  search:
+    max_duration: 0s

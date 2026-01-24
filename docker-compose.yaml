@@ -58,6 +58,7 @@ services:
   tempo:
     image: grafana/tempo:2.4.1
     container_name: tempo
+    command: ["-config.file=/etc/tempo.yaml"]
     ports:
       - "3200:3200"
     volumes:
