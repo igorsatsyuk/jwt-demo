@@ -66,6 +66,23 @@ services:
       - tempo-data:/tmp/tempo
 
   # ------------------------------------------------------------
+  # PROMETHEUS (METRICS)
+  # ------------------------------------------------------------
+  prometheus:
+    image: prom/prometheus:v2.48.0
+    container_name: prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+
+  # ------------------------------------------------------------
   # GRAFANA (UI)
   # ------------------------------------------------------------
   grafana:
@@ -78,6 +95,7 @@ services:
       GF_SECURITY_ADMIN_PASSWORD: admin
     depends_on:
       - tempo
+      - prometheus
     volumes:
       - grafana-data:/var/lib/grafana
       - ./grafana/provisioning:/etc/grafana/provisioning
@@ -85,4 +103,5 @@ services:
 volumes:
   postgres-data:
   tempo-data:
+  prometheus-data:
   grafana-data:
