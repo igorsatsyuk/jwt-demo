@@ -40,6 +40,24 @@ services:
       - ./keycloak/realm-export.json:/opt/keycloak/data/import/realm-export.json
 
   # ------------------------------------------------------------
+  # JWT DEMO APPLICATION
+  # ------------------------------------------------------------
+  jwt-demo:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: jwt-demo
+    ports:
+      - "8081:8081"
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      KEYCLOAK_AUTH_SERVER_URL: http://keycloak:8080
+      MANAGEMENT_OTLP_TRACING_ENDPOINT: http://otel-collector:4318/v1/traces
+    depends_on:
+      - keycloak
+      - otel-collector
+
+  # ------------------------------------------------------------
   # OPEN TELEMETRY COLLECTOR
   # ------------------------------------------------------------
   otel-collector:
