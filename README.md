@@ -487,6 +487,9 @@ Your API wraps this into a structured response.
 ### ❌ Tests fail with "Docker not available"
 Integration tests require Docker to run Testcontainers.
 - Install Docker Desktop
+- **Windows users**: Use Docker Desktop version **4.28.x** for stable Testcontainers support
+  - Newer versions (4.29+) may have compatibility issues with Testcontainers
+  - Download older versions from [Docker Desktop release notes](https://docs.docker.com/desktop/release-notes/)
 - Ensure Docker is running
 - Tests will be skipped if Docker is unavailable
 
