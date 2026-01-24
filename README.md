@@ -13,20 +13,27 @@ Supported features:
 - 🛡 JWT validation via Spring Security  
 - 🎭 Role-based authorization (`USER`, `ADMIN`)  
 - 🚦 Configurable rate limiting (Bucket4j)  
-- 🧪 Full integration test suite  
+- 🧪 Full integration test suite
 - 📦 Automatic Keycloak realm import (users, roles, mappers)
+- 🧪 WireMock for negative testing (network failures, timeouts, error responses)
+- 📊 OpenTelemetry tracing and JSON logging
+- 📈 Prometheus metrics via Actuator
 
 ---
 
 ## 📦 Tech Stack
 
-- Java 17  
-- Spring Boot 3.2  
-- Spring Security (Resource Server)  
-- Spring Web (REST)  
-- Keycloak 26+  
-- Bucket4j Spring Boot Starter  
-- JUnit 5 + TestRestTemplate  
+- Java 17
+- Spring Boot 3.2
+- Spring Security (Resource Server)
+- Spring Web (REST)
+- Keycloak 26+
+- Bucket4j Spring Boot Starter
+- JUnit 5 + TestRestTemplate
+- Testcontainers (Keycloak)
+- WireMock (Negative testing)
+- OpenTelemetry + Logstash encoder
+- Micrometer + Prometheus
 - Docker Compose  
 
 ---
@@ -348,22 +355,53 @@ bucket4j.filters[0].rate-limits[0].bandwidths[0].refill-period=1m
 
 ---
 
-# 🧪 Integration Tests
+# 🧪 Testing
 
-Integration tests verify:
+## Integration Tests
 
-- login
-- refresh
-- logout
-- role-based access
-- JWT validation
-- Keycloak integration
-- protected endpoints
+The project includes comprehensive integration tests using **Testcontainers** and **WireMock**:
 
-Run:
+### KeycloakIntegrationIT
+Uses real Keycloak container via Testcontainers to verify:
+- ✅ Successful login (user and admin)
+- ✅ Successful refresh token flow
+- ✅ Successful logout
+- ❌ Login with wrong password
+- ❌ Login with unknown user
+- ❌ Refresh with invalid token
+- ❌ Logout with invalid token
+- 🛡 Role-based access control (USER/ADMIN)
+- 🔐 JWT validation and protected endpoints
 
+### KeycloakNegativeIT
+Uses WireMock to simulate Keycloak failures:
+- 🔥 Keycloak server errors (500)
+- ⏱ Connection timeouts
+- 📡 Network failures (connection reset)
+- 🚫 Malformed JSON responses
+- 📭 Empty responses (204 No Content)
+- 🔐 Invalid credentials
+- 🔒 Disabled accounts
+- 🔑 Invalid client credentials
+- 🎫 Invalid/expired refresh tokens
+- 🚪 Logout errors
+
+### AuthValidationIT
+Tests DTO validation for authentication endpoints.
+
+Run all tests:
 ```bash
 mvn test
+```
+
+Run integration tests only:
+```bash
+mvn verify
+```
+
+Run specific test:
+```bash
+mvn test -Dtest=KeycloakNegativeIT
 ```
 
 ---
@@ -410,14 +448,19 @@ C:.
     │   └── resources
     │       └── application.properties
     └── test
-        └── java
-            └── lt
-                └── satsyuk
-                    └── api
-                        ├── integrationtest
-                        │   ├── KeycloakIntegrationIT.java
-                        │   └── TestSupport.java
-                        └── unittest
+        ├── java
+        │   └── lt
+        │       └── satsyuk
+        │           └── api
+        │               └── integrationtest
+        │                   ├── AbstractIntegrationTest.java
+        │                   ├── AuthValidationIT.java
+        │                   ├── KeycloakIntegrationIT.java
+        │                   ├── KeycloakNegativeIT.java
+        │                   └── TestKeycloakContainer.java
+        └── resources
+            ├── application-test.properties
+            └── keycloak-realm.json
 ```
 
 ---
@@ -436,8 +479,34 @@ If missing → check Keycloak mappers.
 ---
 
 ### ❌ Logout always returns 200
-Keycloak 26 always returns 200 for `/logout`.  
+Keycloak 26 always returns 200 for `/logout`.
 Your API wraps this into a structured response.
+
+---
+
+### ❌ Tests fail with "Docker not available"
+Integration tests require Docker to run Testcontainers.
+- Install Docker Desktop
+- Ensure Docker is running
+- Tests will be skipped if Docker is unavailable
+
+---
+
+### 📊 Observability
+
+**Metrics** (Prometheus format):
+```
+http://localhost:8081/actuator/prometheus
+```
+
+**Health check**:
+```
+http://localhost:8081/actuator/health
+```
+
+**Tracing**: OpenTelemetry traces are exported to OTLP endpoint (configure in `application.properties`)
+
+**Logging**: Structured JSON logs with trace/span IDs via Logstash encoder
 
 ---
 
