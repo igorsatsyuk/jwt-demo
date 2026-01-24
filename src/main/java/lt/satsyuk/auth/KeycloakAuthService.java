@@ -1,6 +1,7 @@
 package lt.satsyuk.auth;
 
-import lombok.RequiredArgsConstructor;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import lombok.extern.slf4j.Slf4j;
 import lt.satsyuk.auth.dto.KeycloakTokenResponse;
 import lt.satsyuk.auth.dto.LoginRequest;
@@ -21,12 +22,53 @@ import org.springframework.web.client.RestTemplate;
 import java.util.List;
 
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class KeycloakAuthService {
 
     private final RestTemplate rest;
     private final KeycloakProperties props;
+
+    private final Counter loginSuccessCounter;
+    private final Counter loginFailureCounter;
+    private final Counter refreshSuccessCounter;
+    private final Counter refreshFailureCounter;
+    private final Counter logoutSuccessCounter;
+    private final Counter logoutFailureCounter;
+
+    public KeycloakAuthService(RestTemplate rest, KeycloakProperties props, MeterRegistry registry) {
+        this.rest = rest;
+        this.props = props;
+
+        this.loginSuccessCounter = Counter.builder("auth.login")
+                .tag("result", "success")
+                .description("Successful login attempts")
+                .register(registry);
+
+        this.loginFailureCounter = Counter.builder("auth.login")
+                .tag("result", "failure")
+                .description("Failed login attempts")
+                .register(registry);
+
+        this.refreshSuccessCounter = Counter.builder("auth.refresh")
+                .tag("result", "success")
+                .description("Successful token refresh attempts")
+                .register(registry);
+
+        this.refreshFailureCounter = Counter.builder("auth.refresh")
+                .tag("result", "failure")
+                .description("Failed token refresh attempts")
+                .register(registry);
+
+        this.logoutSuccessCounter = Counter.builder("auth.logout")
+                .tag("result", "success")
+                .description("Successful logout attempts")
+                .register(registry);
+
+        this.logoutFailureCounter = Counter.builder("auth.logout")
+                .tag("result", "failure")
+                .description("Failed logout attempts")
+                .register(registry);
+    }
 
     // ------------------------------------------------------------
     // LOGIN
@@ -67,12 +109,14 @@ public class KeycloakAuthService {
                 );
             }
 
+            loginSuccessCounter.increment();
             return response.getBody();
 
         } catch (HttpStatusCodeException ex) {
             log.error("❌ LOGIN error: status={}, body={}",
                     ex.getStatusCode(), ex.getResponseBodyAsString());
 
+            loginFailureCounter.increment();
             throw new KeycloakAuthException(
                     "Login failed",
                     HttpStatus.valueOf(ex.getStatusCode().value()),
@@ -118,12 +162,14 @@ public class KeycloakAuthService {
                 );
             }
 
+            refreshSuccessCounter.increment();
             return response.getBody();
 
         } catch (HttpStatusCodeException ex) {
             log.error("❌ REFRESH error: status={}, body={}",
                     ex.getStatusCode(), ex.getResponseBodyAsString());
 
+            refreshFailureCounter.increment();
             throw new KeycloakAuthException(
                     "Refresh failed",
                     HttpStatus.valueOf(ex.getStatusCode().value()),
@@ -160,6 +206,7 @@ public class KeycloakAuthService {
                     response.getStatusCode(), response.getBody());
 
             if (response.getBody() != null && response.getBody().contains("invalid_token")) {
+                logoutFailureCounter.increment();
                 throw new KeycloakAuthException(
                         "invalid_token",
                         HttpStatus.valueOf(response.getStatusCode().value()),
@@ -167,10 +214,13 @@ public class KeycloakAuthService {
                 );
             }
 
+            logoutSuccessCounter.increment();
+
         } catch (HttpStatusCodeException ex) {
             log.error("❌ REVOKE error: status={}, body={}",
                     ex.getStatusCode(), ex.getResponseBodyAsString());
 
+            logoutFailureCounter.increment();
             throw new KeycloakAuthException(
                     "Logout failed",
                     HttpStatus.valueOf(ex.getStatusCode().value()),
