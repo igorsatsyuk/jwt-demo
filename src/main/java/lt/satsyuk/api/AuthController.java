@@ -9,7 +9,7 @@ import lt.satsyuk.auth.dto.LoginRequest;
 import lt.satsyuk.auth.dto.LogoutRequest;
 import lt.satsyuk.auth.dto.RefreshRequest;
 import lt.satsyuk.exception.KeycloakAuthException;
-import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -27,8 +27,9 @@ public class AuthController {
             return ResponseEntity.ok(ApiResponse.ok(tokens));
         } catch (KeycloakAuthException ex) {
             return ResponseEntity
-                    .status(HttpStatus.UNAUTHORIZED)
-                    .body(ApiResponse.error(40101, ex.getKeycloakMessage()));
+                    .status(ex.getStatus())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(ApiResponse.error(ApiResponse.ErrorCode.UNAUTHORIZED.getCode(), ex.getKeycloakMessage()));
         }
     }
 
@@ -39,12 +40,13 @@ public class AuthController {
             return ResponseEntity.ok(ApiResponse.ok(tokens));
         } catch (KeycloakAuthException ex) {
             return ResponseEntity
-                    .status(HttpStatus.UNAUTHORIZED)
-                    .body(ApiResponse.error(40102, ex.getKeycloakMessage()));
+                    .status(ex.getStatus())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(ApiResponse.error(ApiResponse.ErrorCode.INVALID_GRANT.getCode(), ex.getKeycloakMessage()));
         }
     }
 
-    // Keycloak 26 revoke: 200 OK даже при ошибке → мы тоже отвечаем 200
+    // Keycloak 26 revoke: 200 OK даже при ошибке
     @PostMapping("/logout")
     public ResponseEntity<ApiResponse<?>> logout(@Valid @RequestBody LogoutRequest req) {
         try {
@@ -52,8 +54,9 @@ public class AuthController {
             return ResponseEntity.ok(ApiResponse.ok(null));
         } catch (KeycloakAuthException ex) {
             return ResponseEntity
-                    .status(HttpStatus.OK)
-                    .body(ApiResponse.error(40103, ex.getKeycloakMessage()));
+                    .status(ex.getStatus())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(ApiResponse.error(ApiResponse.ErrorCode.INVALID_TOKEN.getCode(), ex.getKeycloakMessage()));
         }
     }
 }

@@ -1,10 +1,12 @@
 package lt.satsyuk.config;
 
+import lt.satsyuk.api.dto.ApiResponse;
 import lt.satsyuk.security.KeycloakRoleConverter;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
@@ -37,17 +39,20 @@ public class SecurityConfig {
                 .exceptionHandling(ex -> ex
                         .authenticationEntryPoint((req, res, e) -> {
                             res.setStatus(HttpStatus.UNAUTHORIZED.value());
-                            res.setContentType("application/json");
-                            res.getWriter().write("""
-                                {"code":40101,"message":"Unauthorized"}
-                            """);
+                            res.setContentType(MediaType.APPLICATION_JSON.toString());
+                            res.getWriter().write(String.format("""
+                                {"code":%d,"message":"%s"}
+                            """, ApiResponse.ErrorCode.UNAUTHORIZED.getCode(),
+                                    ApiResponse.ErrorCode.UNAUTHORIZED.getDescription()));
+
                         })
                         .accessDeniedHandler((req, res, e) -> {
                             res.setStatus(HttpStatus.FORBIDDEN.value());
-                            res.setContentType("application/json");
-                            res.getWriter().write("""
-                                {"code":40301,"message":"Forbidden"}
-                            """);
+                            res.setContentType(MediaType.APPLICATION_JSON.toString());
+                            res.getWriter().write(String.format("""
+                                {"code":%d,"message":"%s"}
+                            """, ApiResponse.ErrorCode.FORBIDDEN.getCode(),
+                                    ApiResponse.ErrorCode.FORBIDDEN.getDescription()));
                         })
                 );
 
