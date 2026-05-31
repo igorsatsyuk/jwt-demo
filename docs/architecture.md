@@ -14,7 +14,7 @@ Source: `docs/diagrams/system-context.puml`
 
 Source: `docs/diagrams/sequence-auth-lifecycle.puml`
 
-## Sequence: Protected endpoint authorization (Bearer)
+## Sequence: Protected endpoint authorization (Bearer only)
 
 ![Protected authorization sequence](./diagrams/sequence-protected-authorization.png)
 

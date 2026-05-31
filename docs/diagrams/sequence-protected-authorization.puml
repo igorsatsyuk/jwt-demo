@@ -1,5 +1,5 @@
 @startuml
-title Protected Endpoint Authorization (Bearer)
+title Protected Endpoint Authorization (Bearer only)
 
 actor Client
 participant "Protected API endpoint" as API
@@ -8,19 +8,14 @@ participant "Keycloak\n/token/introspect" as KC
 participant "DPoP Filter" as DPoP
 
 Client -> API: Authorization: Bearer <access_token>
-opt DPoP proof header provided
-  Client -> API: DPoP: <proof-jwt>
-end
 
 API -> Intro: introspect(access_token)
 Intro -> KC: POST /token/introspect
 KC --> Intro: active + roles + optional cnf.jkt
 Intro --> API: Authentication + ROLE_*
 
-opt cnf.jkt present
-  API -> DPoP: validate provided DPoP proof\nhtm/htu/iat/jti/ath + thumbprint binding
-  DPoP --> API: allow or deny
-end
+API -> DPoP: enforce DPoP policy from token attributes
+DPoP --> API: allow or deny
 
 API --> Client: AppResponse | 401 | 403
 

@@ -320,10 +320,8 @@ This ensures a clear separation of responsibilities:
 ### DPoP Flow (optional)
 
 - For `/api/auth/login`, `/api/auth/refresh`, `/api/auth/logout` you can pass `DPoP: <proof-jwt>`; backend forwards it to Keycloak.
-- Protected endpoints accept:
-  - `Authorization: Bearer <access_token>` (existing flow)
-  - `Authorization: DPoP <access_token>` + `DPoP: <proof-jwt>` (DPoP flow)
-- If introspection returns `cnf.jkt`, protected endpoints require valid DPoP proof (`htm`, `htu`, `iat`, `jti`, `ath`, signature, thumbprint binding).
+- Protected endpoints currently use `Authorization: Bearer <access_token>`.
+- DPoP policy on protected endpoints is enforced from token attributes during request validation.
 
 ---
 
@@ -331,7 +329,7 @@ This ensures a clear separation of responsibilities:
 
 ![Authentication sequence](docs/diagrams/sequence-auth-lifecycle.png)
 
-## 📊 Protected Endpoint Authorization (Bearer)
+## 📊 Protected Endpoint Authorization (Bearer only)
 
 ![Protected authorization sequence](docs/diagrams/sequence-protected-authorization.png)
 
