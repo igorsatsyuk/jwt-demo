@@ -1,0 +1,34 @@
+@startuml
+title Observability Pipeline (OTLP-first)
+
+skinparam backgroundColor #FFFFFF
+skinparam packageStyle rectangle
+skinparam shadowing false
+skinparam defaultTextAlignment center
+
+rectangle "Spring Boot jwt-demo" as app {
+  rectangle "Metrics endpoint\n/actuator/prometheus" as metrics
+  rectangle "Traces exporter\nOTLP /v1/traces" as traces
+  rectangle "Logs exporter\nOTLP /v1/logs" as logs
+}
+
+rectangle "OTel Collector" as collector
+
+rectangle "Telemetry backends" as backends {
+  rectangle "Prometheus" as prometheus
+  rectangle "Tempo" as tempo
+  rectangle "Loki" as loki
+}
+
+rectangle "Grafana" as grafana
+
+metrics --> prometheus : scrape
+traces --> collector : OTLP traces
+logs --> collector : OTLP logs
+collector --> tempo : export traces
+collector --> loki : export logs
+prometheus --> grafana
+tempo --> grafana
+loki --> grafana
+
+@enduml

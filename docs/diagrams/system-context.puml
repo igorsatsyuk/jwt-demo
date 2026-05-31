@@ -1,0 +1,33 @@
+@startuml
+title JWT Demo - System Context
+
+skinparam backgroundColor #FFFFFF
+skinparam packageStyle rectangle
+skinparam shadowing false
+skinparam defaultTextAlignment center
+
+actor "Client App / API consumer" as client
+
+rectangle "jwt-demo (Spring Boot)" as app {
+  rectangle "Auth API\n/api/auth/*" as auth
+  rectangle "Protected APIs\n/api/clients, /api/accounts, /api/requests" as protected
+  rectangle "Security Layer\nOpaque introspection + DPoP validation" as security
+  rectangle "Async Worker\nQuartz request processing" as worker
+}
+
+database "PostgreSQL\n(client, account, request, quartz tables)" as db
+cloud "Keycloak\nOIDC / token / introspection" as keycloak
+
+client --> auth : login / refresh / logout\n(optional DPoP proof)
+auth --> keycloak : form-encoded grant requests
+keycloak --> auth : tokens / logout result
+auth --> client : AppResponse
+
+client --> protected : Bearer or DPoP access token
+protected --> security : authenticate + authorize
+security --> keycloak : opaque introspection
+protected --> db : persist request / read data
+worker --> db : process pending requests
+protected --> client : AppResponse
+
+@enduml
