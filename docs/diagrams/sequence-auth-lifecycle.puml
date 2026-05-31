@@ -1,0 +1,34 @@
+@startuml
+title Authentication Lifecycle (Login / Refresh / Logout)
+
+actor Client
+participant "AuthController\n/api/auth/*" as API
+participant "KeycloakAuthService" as Service
+participant "Keycloak OIDC\n/token, /logout" as KC
+
+Client -> API: POST /api/auth/{login|refresh|logout}\n+ clientId/clientSecret
+opt DPoP auth request
+  Client -> API: DPoP: <proof-jwt>
+  API -> Service: forward DPoP header
+end
+
+API -> Service: validate DTO + call auth operation
+
+alt Login
+  Service -> KC: grant_type=password\nusername/password + client credentials
+  KC --> Service: 200 {access_token, refresh_token}
+  Service --> API: AuthResponse
+  API --> Client: 200 AppResponse<AuthResponse>
+else Refresh
+  Service -> KC: grant_type=refresh_token\nrefresh_token + client credentials
+  KC --> Service: 200 {new_access_token, new_refresh_token}
+  Service --> API: AuthResponse
+  API --> Client: 200 AppResponse<AuthResponse>
+else Logout
+  Service -> KC: POST /logout\nrefresh_token + client credentials
+  KC --> Service: 200 (always)
+  Service --> API: success
+  API --> Client: 200 AppResponse(success=true)
+end
+
+@enduml

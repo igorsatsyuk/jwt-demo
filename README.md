@@ -281,13 +281,9 @@ Reports are generated at:
 
 ## High-level flow
 
-```mermaid
-flowchart LR
-    Client[Client<br/>Frontend] -->|username/password<br/>clientId/clientSecret| Proxy[Spring Boot Proxy<br/>This project]
-    Proxy -->|/token, /logout| Keycloak[Keycloak<br/>Auth Server]
-    Keycloak -->|tokens / logout result| Proxy
-    Proxy -->|AppResponse| Client
-```
+![JWT demo system context](docs/diagrams/system-context.png)
+
+Full diagram set: [docs/architecture.md](docs/architecture.md)
 
 ---
 
@@ -331,55 +327,13 @@ This ensures a clear separation of responsibilities:
 
 ---
 
-## 📊 Sequence Diagram (Login / Refresh / Logout)
+## 📊 Authentication Sequence (Login / Refresh / Logout)
 
-### Login Flow
+![Authentication sequence](docs/diagrams/sequence-auth-lifecycle.png)
 
-```mermaid
-sequenceDiagram
-    autonumber
-    actor Client
-    participant SpringBoot as Spring Boot (AuthController)
-    participant Keycloak
+## 📊 Protected Endpoint Authorization (Bearer / DPoP)
 
-    Client->>SpringBoot: POST /api/auth/login\n{username, password, clientId, clientSecret}
-    SpringBoot->>Keycloak: KeycloakAuthService.login()
-    Keycloak->>Keycloak: POST /realms/my-realm/protocol/openid-connect/token\ngrant_type=password\nusername, password\nclient_id, client_secret
-    Keycloak-->>SpringBoot: 200 OK\n{access_token, refresh_token}
-    SpringBoot-->>Client: AppResponse<AuthResponse>
-```
-
-### Refresh Flow
-
-```mermaid
-sequenceDiagram
-    autonumber
-    actor Client
-    participant SpringBoot as Spring Boot (AuthController)
-    participant Keycloak
-
-    Client->>SpringBoot: POST /api/auth/refresh\n{refreshToken, clientId, clientSecret}
-    SpringBoot->>Keycloak: KeycloakAuthService.refresh()
-    Keycloak->>Keycloak: POST /realms/my-realm/protocol/openid-connect/token\ngrant_type=refresh_token\nrefresh_token\nclient_id, client_secret
-    Keycloak-->>SpringBoot: 200 OK\n{new_access_token, new_refresh_token}
-    SpringBoot-->>Client: AppResponse<AuthResponse>
-```
-
-### Logout Flow
-
-```mermaid
-sequenceDiagram
-    autonumber
-    actor Client
-    participant SpringBoot as Spring Boot (AuthController)
-    participant Keycloak
-
-    Client->>SpringBoot: POST /api/auth/logout\n{refreshToken, clientId, clientSecret}
-    SpringBoot->>Keycloak: KeycloakAuthService.logout()
-    Keycloak->>Keycloak: POST /realms/my-realm/protocol/openid-connect/logout\nclient_id, client_secret\nrefresh_token
-    Keycloak-->>SpringBoot: 200 OK (always)
-    SpringBoot-->>Client: AppResponse(success=true)
-```
+![Protected authorization sequence](docs/diagrams/sequence-protected-authorization.png)
 
 ---
 
@@ -795,32 +749,7 @@ http://localhost:8081/actuator/health
 - logs: `Spring Boot -> OTLP -> OTel Collector -> Loki`
 - metrics: `Prometheus` pulls `/actuator/prometheus`
 
-```mermaid
-flowchart LR
-  subgraph App[Spring Boot jwt-demo]
-    A1[HTTP metrics\nActuator /prometheus]
-    A2[Traces OTLP\nmanagement.opentelemetry.tracing.export.otlp.endpoint]
-    A3[Logs OTLP\nmanagement.opentelemetry.logging.export.otlp.endpoint]
-  end
-
-  subgraph Infra[Observability Infra]
-    C[OTel Collector]
-    T[Tempo]
-    L[Loki]
-    P[Prometheus]
-    G[Grafana]
-  end
-
-  A1 -->|pull /actuator/prometheus| P
-  A2 -->|OTLP traces| C
-  A3 -->|OTLP logs| C
-  C -->|traces| T
-  C -->|logs| L
-
-  P --> G
-  T --> G
-  L --> G
-```
+![Observability pipeline](docs/diagrams/observability-pipeline.png)
 
 **Recommended properties**
 
