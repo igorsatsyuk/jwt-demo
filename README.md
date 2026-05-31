@@ -331,7 +331,7 @@ This ensures a clear separation of responsibilities:
 
 ![Authentication sequence](docs/diagrams/sequence-auth-lifecycle.png)
 
-## 📊 Protected Endpoint Authorization (Bearer / DPoP)
+## 📊 Protected Endpoint Authorization (Bearer)
 
 ![Protected authorization sequence](docs/diagrams/sequence-protected-authorization.png)
 
