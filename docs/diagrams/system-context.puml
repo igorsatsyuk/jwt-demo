@@ -23,7 +23,7 @@ auth --> keycloak : form-encoded grant requests
 keycloak --> auth : tokens / logout result
 auth --> client : AppResponse
 
-client --> protected : Bearer or DPoP access token
+client --> protected : Bearer access token
 protected --> security : authenticate + authorize
 security --> keycloak : opaque introspection
 protected --> db : persist request / read data

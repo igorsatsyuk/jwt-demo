@@ -293,7 +293,7 @@ The project uses a **clean, layered security architecture** combining:
 
 - Keycloak for authentication and role assignment
 - Spring Security for **opaque token introspection**
-- DPoP proof validation (`Authorization: DPoP <token>` + `DPoP` header)
+- DPoP proof validation policy for DPoP-bound tokens
 - Method-level authorization via `@PreAuthorize`
 - A custom role converter for mapping Keycloak roles to Spring authorities
 
@@ -490,7 +490,6 @@ Requires bearer token role: `CLIENT_GET`
 
 Authorization options:
 - `Authorization: Bearer <access_token>`
-- `Authorization: DPoP <access_token>` and `DPoP: <proof-jwt>`
 
 | Endpoint | Method | Required role |
 |----------|--------|---------------|
@@ -697,9 +696,8 @@ If missing → check Keycloak mappers.
 
 ### ❌ 401 for DPoP token
 For DPoP-bound access tokens:
-- use `Authorization: DPoP <access_token>`
-- send `DPoP` proof for every protected request
-- ensure proof matches method+URL and is signed by key matching `cnf.jkt`
+- use `Authorization: Bearer <access_token>`
+- ensure token metadata and request context satisfy DPoP validation policy (`cnf.jkt` checks)
 
 If request fails and the response includes `X-Trace-Id`, use it to find correlated logs/traces.
 
