@@ -293,7 +293,7 @@ The project uses a **clean, layered security architecture** combining:
 
 - Keycloak for authentication and role assignment
 - Spring Security for **opaque token introspection**
-- DPoP proof validation policy for DPoP-bound tokens
+- DPoP proof validation (`Authorization: DPoP <token>` + `DPoP` header)
 - Method-level authorization via `@PreAuthorize`
 - A custom role converter for mapping Keycloak roles to Spring authorities
 
@@ -320,8 +320,10 @@ This ensures a clear separation of responsibilities:
 ### DPoP Flow (optional)
 
 - For `/api/auth/login`, `/api/auth/refresh`, `/api/auth/logout` you can pass `DPoP: <proof-jwt>`; backend forwards it to Keycloak.
-- Protected endpoints currently use `Authorization: Bearer <access_token>`.
-- DPoP policy on protected endpoints is enforced from token attributes during request validation.
+- Protected endpoints accept:
+  - `Authorization: Bearer <access_token>` (unbound tokens)
+  - `Authorization: DPoP <access_token>` + `DPoP: <proof-jwt>` (DPoP-bound tokens)
+- If introspection returns `cnf.jkt`, protected endpoints require valid DPoP proof (`htm`, `htu`, `iat`, `jti`, `ath`, signature, thumbprint binding).
 
 ---
 
@@ -329,7 +331,7 @@ This ensures a clear separation of responsibilities:
 
 ![Authentication sequence](docs/diagrams/sequence-auth-lifecycle.png)
 
-## 📊 Protected Endpoint Authorization (Bearer only)
+## 📊 Protected Endpoint Authorization (Bearer / DPoP)
 
 ![Protected authorization sequence](docs/diagrams/sequence-protected-authorization.png)
 
@@ -490,6 +492,7 @@ Requires bearer token role: `CLIENT_GET`
 
 Authorization options:
 - `Authorization: Bearer <access_token>`
+- `Authorization: DPoP <access_token>` and `DPoP: <proof-jwt>`
 
 | Endpoint | Method | Required role |
 |----------|--------|---------------|
@@ -696,8 +699,9 @@ If missing → check Keycloak mappers.
 
 ### ❌ 401 for DPoP token
 For DPoP-bound access tokens:
-- use `Authorization: Bearer <access_token>`
-- ensure token metadata and request context satisfy DPoP validation policy (`cnf.jkt` checks)
+- use `Authorization: DPoP <access_token>`
+- send `DPoP` proof for every protected request
+- ensure proof matches method+URL and is signed by key matching `cnf.jkt`
 
 If request fails and the response includes `X-Trace-Id`, use it to find correlated logs/traces.
 

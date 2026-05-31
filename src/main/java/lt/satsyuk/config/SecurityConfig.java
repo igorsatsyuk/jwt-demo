@@ -3,6 +3,7 @@ package lt.satsyuk.config;
 import lt.satsyuk.auth.JsonAccessDeniedHandler;
 import lt.satsyuk.auth.JsonAuthEntryPoint;
 import lt.satsyuk.security.DpopAuthenticationFilter;
+import lt.satsyuk.security.DpopAwareBearerTokenResolver;
 import lt.satsyuk.security.KeycloakOpaqueRoleConverter;
 import lt.satsyuk.security.KeycloakOpaqueTokenIntrospector;
 import lt.satsyuk.security.RateLimitingFilter;
@@ -46,6 +47,7 @@ public class SecurityConfig {
 
                 .oauth2ResourceServer(oauth2 -> oauth2
                         .opaqueToken(opaque -> opaque.introspector(opaqueTokenIntrospector))
+                        .bearerTokenResolver(new DpopAwareBearerTokenResolver())
                         .authenticationEntryPoint(jsonAuthEntryPoint)
                         .accessDeniedHandler(jsonAccessDeniedHandler)
                 )

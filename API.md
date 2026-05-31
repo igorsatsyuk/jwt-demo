@@ -58,8 +58,10 @@ Use this value to correlate client-side errors with server logs/traces (includin
 
 DPoP support:
 - Auth endpoints accept optional header `DPoP: <proof-jwt>` and forward it to Keycloak.
-- Protected endpoints use `Authorization: Bearer <access_token>`.
-- DPoP validation is enforced by backend policy for DPoP-bound tokens (`cnf.jkt`).
+- Protected endpoints support both:
+  - `Authorization: Bearer <access_token>`
+  - `Authorization: DPoP <access_token>` + `DPoP: <proof-jwt>`
+- If token introspection contains `cnf.jkt`, DPoP proof is mandatory.
 
 ### POST /api/auth/login
 
@@ -176,6 +178,13 @@ All client endpoints require a valid access token in the `Authorization` header:
 
 ```
 Authorization: Bearer <access_token>
+```
+
+Or DPoP:
+
+```
+Authorization: DPoP <access_token>
+DPoP: <proof-jwt>
 ```
 
 ### POST /api/clients
