@@ -53,13 +53,24 @@ def esc(value: str) -> str:
     return html.escape(str(value), quote=True)
 
 
+def branch_name() -> str:
+    return os.environ.get("GITHUB_HEAD_REF") or os.environ.get("GITHUB_REF_NAME") or ""
+
+
+def repo_name() -> str:
+    full_name = os.environ.get("GITHUB_REPOSITORY", "")
+    if "/" in full_name:
+        return full_name.split("/", 1)[1]
+    return full_name
+
+
 def compose_message() -> str:
     current_overall = overall_status()
     lines = [
-        "jwt-demo CI finished",
+        f"{esc(repo_name() or 'repository')} CI finished",
         "",
         f"{status_icon(current_overall)} <b>Status:</b> {esc(current_overall)}",
-        f"<b>Branch:</b> {esc(os.environ.get('GITHUB_REF_NAME', ''))}",
+        f"<b>Branch:</b> {esc(branch_name())}",
         f"<b>Commit:</b> {esc(os.environ.get('GITHUB_SHA', ''))}",
         f"<b>Actor:</b> {esc(os.environ.get('GITHUB_ACTOR', ''))}",
         f"<b>Workflow:</b> {esc(os.environ.get('GITHUB_WORKFLOW', ''))}",
