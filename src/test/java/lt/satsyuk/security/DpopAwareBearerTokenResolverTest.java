@@ -24,6 +24,10 @@ class DpopAwareBearerTokenResolverTest {
         String token = resolver.resolve(request);
 
         assertThat(token).isEqualTo(expectedToken);
+        if (authorization.regionMatches(true, 0, "DPoP ", 0, "DPoP ".length())) {
+            assertThat(request.getAttribute(DpopAwareBearerTokenResolver.ORIGINAL_AUTHORIZATION_ATTRIBUTE))
+                    .isEqualTo(authorization);
+        }
     }
 
     @Test

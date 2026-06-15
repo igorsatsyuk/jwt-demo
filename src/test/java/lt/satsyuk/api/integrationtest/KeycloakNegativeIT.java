@@ -56,7 +56,7 @@ class KeycloakNegativeIT extends WireMockIntegrationTest {
         stubFor(post(urlPathMatching(REALMS_PROTOCOL_OPENID_CONNECT_TOKEN))
                 .willReturn(aResponse()
                         .withStatus(HttpStatus.OK.value())
-                        .withFixedDelay(3000) // 3 seconds delay
+                        .withFixedDelay(12_000) // longer than the test profile Keycloak client timeout
                         .withBody("{}")));
 
         ResponseEntity<AppResponse<KeycloakTokenResponse>> response = loginRequest(

@@ -88,7 +88,10 @@ public class DpopAuthenticationFilter extends OncePerRequestFilter {
     }
 
     private boolean usesDpopScheme(HttpServletRequest request) {
-        String authorization = request.getHeader(HttpHeaders.AUTHORIZATION);
+        Object originalAuthorization = request.getAttribute(DpopAwareBearerTokenResolver.ORIGINAL_AUTHORIZATION_ATTRIBUTE);
+        String authorization = originalAuthorization instanceof String original
+                ? original
+                : request.getHeader(HttpHeaders.AUTHORIZATION);
         return StringUtils.hasText(authorization)
                 && authorization.regionMatches(true, 0, DPOP_SCHEME, 0, DPOP_SCHEME.length());
     }
