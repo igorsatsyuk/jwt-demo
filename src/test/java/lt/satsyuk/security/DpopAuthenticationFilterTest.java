@@ -37,6 +37,8 @@ import static org.mockito.Mockito.verifyNoInteractions;
 @ExtendWith(MockitoExtension.class)
 class DpopAuthenticationFilterTest {
 
+    private static final Instant NOW = Instant.parse("2026-01-01T12:00:00Z");
+
     @Mock
     private DpopProofValidator validator;
 
@@ -222,8 +224,8 @@ class DpopAuthenticationFilterTest {
         OAuth2AccessToken accessToken = new OAuth2AccessToken(
                 OAuth2AccessToken.TokenType.BEARER,
                 token,
-                Instant.now().minusSeconds(60),
-                Instant.now().plusSeconds(300)
+                NOW.minusSeconds(60),
+                NOW.plusSeconds(300)
         );
         return new BearerTokenAuthentication(principal, accessToken, principal.getAuthorities());
     }
@@ -236,8 +238,8 @@ class DpopAuthenticationFilterTest {
         Jwt jwt = Jwt.withTokenValue(token)
                 .header("alg", "RS256")
                 .claims(existingClaims -> existingClaims.putAll(tokenClaims))
-                .issuedAt(Instant.now().minusSeconds(60))
-                .expiresAt(Instant.now().plusSeconds(300))
+                .issuedAt(NOW.minusSeconds(60))
+                .expiresAt(NOW.plusSeconds(300))
                 .build();
 
         return new JwtAuthenticationToken(jwt, List.of(new SimpleGrantedAuthority("ROLE_CLIENT_GET")));

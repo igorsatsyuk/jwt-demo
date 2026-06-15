@@ -21,6 +21,7 @@ import org.springframework.util.StringUtils;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.time.Clock;
 import java.time.Instant;
 import java.util.Date;
 
@@ -36,10 +37,12 @@ public class DpopProofValidator {
     private static final String HTTP = "http";
 
     private final DpopProperties properties;
+    private final Clock clock;
     private final Cache<String, Instant> usedProofIds;
 
-    public DpopProofValidator(DpopProperties properties) {
+    public DpopProofValidator(DpopProperties properties, Clock clock) {
         this.properties = properties;
+        this.clock = clock;
         this.usedProofIds = Caffeine.newBuilder()
                 .maximumSize(properties.getReplayCacheSize())
                 .expireAfterWrite(properties.getMaxProofAge().plus(properties.getClockSkew()))
@@ -171,7 +174,7 @@ public class DpopProofValidator {
             throw new DpopProofValidationException("DPoP proof issue time is missing");
         }
 
-        Instant now = Instant.now();
+        Instant now = Instant.now(clock);
         Instant iat = issueTime.toInstant();
         Instant notBefore = now.minus(properties.getMaxProofAge()).minus(properties.getClockSkew());
         Instant notAfter = now.plus(properties.getClockSkew());
@@ -190,7 +193,7 @@ public class DpopProofValidator {
         if (usedProofIds.getIfPresent(jti) != null) {
             throw new DpopProofValidationException("DPoP proof replay detected");
         }
-        usedProofIds.put(jti, Instant.now());
+        usedProofIds.put(jti, Instant.now(clock));
     }
 
     private void validateAccessTokenHash(JWTClaimsSet claims, String accessToken) {

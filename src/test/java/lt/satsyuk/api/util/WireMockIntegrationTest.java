@@ -23,7 +23,6 @@ import org.springframework.test.annotation.DirtiesContext;
 
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
-import java.time.Instant;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
@@ -251,8 +250,8 @@ public abstract class WireMockIntegrationTest extends AbstractIntegrationTest {
             JWTClaimsSet claims = new JWTClaimsSet.Builder()
                     .subject(username)
                     .issuer(issuer)
-                    .expirationTime(Date.from(Instant.now().plusSeconds(300)))
-                    .issueTime(new Date())
+                    .expirationTime(Date.from(TestTime.FIXED_INSTANT.plusSeconds(300)))
+                    .issueTime(Date.from(TestTime.FIXED_INSTANT))
                     .jwtID(UUID.randomUUID().toString())
                     .claim("preferred_username", username)
                     .claim("azp", "spring-app")

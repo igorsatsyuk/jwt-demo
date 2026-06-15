@@ -16,8 +16,10 @@ import org.springframework.test.util.ReflectionTestUtils;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.MessageDigest;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.Date;
 import java.util.UUID;
 
@@ -31,6 +33,7 @@ class DpopProofValidatorTest {
     private static final String ACCESS_TOKEN = "access-token-value";
     private static final String URI = "https://localhost:8443/api/clients/1";
     private static final String METHOD = "GET";
+    private static final Instant NOW = Instant.parse("2026-01-01T12:00:00Z");
 
     private DpopProperties properties;
     private DpopProofValidator validator;
@@ -44,7 +47,7 @@ class DpopProofValidatorTest {
         properties.setMaxProofAge(Duration.ofSeconds(30));
         properties.setClockSkew(Duration.ofSeconds(1));
 
-        validator = new DpopProofValidator(properties);
+        validator = new DpopProofValidator(properties, Clock.fixed(NOW, ZoneOffset.UTC));
         rsaKey = generateRsaKey();
     }
 
@@ -52,7 +55,7 @@ class DpopProofValidatorTest {
     void validatesCorrectProof() throws Exception {
         String expectedJkt = rsaKey.toPublicJWK().computeThumbprint().toString();
         String proof = createProof(rsaKey, METHOD, URI, ACCESS_TOKEN, UUID.randomUUID().toString(),
-                new JOSEObjectType("dpop+jwt"), true, Instant.now(), true);
+                new JOSEObjectType("dpop+jwt"), true, NOW, true);
 
         assertThatCode(() -> validator.validate(METHOD, URI, ACCESS_TOKEN, proof, expectedJkt))
                 .doesNotThrowAnyException();
@@ -82,7 +85,7 @@ class DpopProofValidatorTest {
     @Test
     void rejectsInvalidProofType() throws Exception {
         String proof = createProof(rsaKey, METHOD, URI, ACCESS_TOKEN, UUID.randomUUID().toString(),
-                JOSEObjectType.JWT, true, Instant.now(), true);
+                JOSEObjectType.JWT, true, NOW, true);
 
         assertThatThrownBy(() -> validator.validate(METHOD, URI, ACCESS_TOKEN, proof, null))
                 .isInstanceOf(DpopProofValidationException.class)
@@ -105,7 +108,7 @@ class DpopProofValidatorTest {
     @Test
     void rejectsMissingJwk() throws Exception {
         String proof = createProof(rsaKey, METHOD, URI, ACCESS_TOKEN, UUID.randomUUID().toString(),
-                new JOSEObjectType("dpop+jwt"), false, Instant.now(), true);
+                new JOSEObjectType("dpop+jwt"), false, NOW, true);
 
         assertThatThrownBy(() -> validator.validate(METHOD, URI, ACCESS_TOKEN, proof, null))
                 .isInstanceOf(DpopProofValidationException.class)
@@ -115,7 +118,7 @@ class DpopProofValidatorTest {
     @Test
     void rejectsMethodMismatch() throws Exception {
         String proof = createProof(rsaKey, "POST", URI, ACCESS_TOKEN, UUID.randomUUID().toString(),
-                new JOSEObjectType("dpop+jwt"), true, Instant.now(), true);
+                new JOSEObjectType("dpop+jwt"), true, NOW, true);
 
         assertThatThrownBy(() -> validator.validate(METHOD, URI, ACCESS_TOKEN, proof, null))
                 .isInstanceOf(DpopProofValidationException.class)
@@ -125,7 +128,7 @@ class DpopProofValidatorTest {
     @Test
     void rejectsUriMismatch() throws Exception {
         String proof = createProof(rsaKey, METHOD, URI + "/mismatch", ACCESS_TOKEN, UUID.randomUUID().toString(),
-                new JOSEObjectType("dpop+jwt"), true, Instant.now(), true);
+                new JOSEObjectType("dpop+jwt"), true, NOW, true);
 
         assertThatThrownBy(() -> validator.validate(METHOD, URI, ACCESS_TOKEN, proof, null))
                 .isInstanceOf(DpopProofValidationException.class)
@@ -144,7 +147,7 @@ class DpopProofValidatorTest {
 
     @Test
     void rejectsExpiredIssueTime() throws Exception {
-        Instant expired = Instant.now()
+        Instant expired = NOW
                 .minus(properties.getMaxProofAge())
                 .minus(properties.getClockSkew())
                 .minusSeconds(2);
@@ -159,7 +162,7 @@ class DpopProofValidatorTest {
     @Test
     void rejectsMissingAthClaim() throws Exception {
         String proof = createProof(rsaKey, METHOD, URI, ACCESS_TOKEN, UUID.randomUUID().toString(),
-                new JOSEObjectType("dpop+jwt"), true, Instant.now(), false);
+                new JOSEObjectType("dpop+jwt"), true, NOW, false);
 
         assertThatThrownBy(() -> validator.validate(METHOD, URI, ACCESS_TOKEN, proof, null))
                 .isInstanceOf(DpopProofValidationException.class)
@@ -170,7 +173,7 @@ class DpopProofValidatorTest {
     void rejectsAthMismatch() throws Exception {
         String expectedJkt = rsaKey.toPublicJWK().computeThumbprint().toString();
         String proof = createProof(rsaKey, METHOD, URI, "different-token", UUID.randomUUID().toString(),
-                new JOSEObjectType("dpop+jwt"), true, Instant.now(), true);
+                new JOSEObjectType("dpop+jwt"), true, NOW, true);
 
         assertThatThrownBy(() -> validator.validate(METHOD, URI, ACCESS_TOKEN, proof, expectedJkt))
                 .isInstanceOf(DpopProofValidationException.class)
@@ -180,7 +183,7 @@ class DpopProofValidatorTest {
     @Test
     void rejectsJktMismatch() throws Exception {
         String proof = createProof(rsaKey, METHOD, URI, ACCESS_TOKEN, UUID.randomUUID().toString(),
-                new JOSEObjectType("dpop+jwt"), true, Instant.now(), true);
+                new JOSEObjectType("dpop+jwt"), true, NOW, true);
 
         assertThatThrownBy(() -> validator.validate(METHOD, URI, ACCESS_TOKEN, proof, "another-thumbprint"))
                 .isInstanceOf(DpopProofValidationException.class)
@@ -192,7 +195,7 @@ class DpopProofValidatorTest {
         String expectedJkt = rsaKey.toPublicJWK().computeThumbprint().toString();
         String jti = UUID.randomUUID().toString();
         String proof = createProof(rsaKey, METHOD, URI, ACCESS_TOKEN, jti,
-                new JOSEObjectType("dpop+jwt"), true, Instant.now(), true);
+                new JOSEObjectType("dpop+jwt"), true, NOW, true);
 
         validator.validate(METHOD, URI, ACCESS_TOKEN, proof, expectedJkt);
 
