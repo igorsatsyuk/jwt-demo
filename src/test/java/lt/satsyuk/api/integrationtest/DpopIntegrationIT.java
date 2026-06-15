@@ -4,7 +4,6 @@ import lt.satsyuk.MainApplication;
 import lt.satsyuk.api.util.WireMockIntegrationTest;
 import lt.satsyuk.dto.AppResponse;
 import lt.satsyuk.dto.KeycloakTokenResponse;
-import lt.satsyuk.repository.ClientRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -31,8 +30,7 @@ class DpopIntegrationIT extends WireMockIntegrationTest {
 
     DpopIntegrationIT(@Qualifier("keycloakProperties") KeycloakProperties props,
                       CacheManager cacheManager,
-                      RateLimitingFilter rateLimitingFilter,
-                      ClientRepository clientRepository) {
+                      RateLimitingFilter rateLimitingFilter) {
         super(props, cacheManager, rateLimitingFilter);
     }
 
