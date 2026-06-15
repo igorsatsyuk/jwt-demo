@@ -16,6 +16,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.TestConstructor;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
+import org.springframework.context.annotation.Primary;
+import org.springframework.boot.test.context.TestConfiguration;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.springframework.cache.Cache;
@@ -30,6 +34,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.springframework.web.client.DefaultResponseErrorHandler;
 import org.springframework.web.client.RestTemplate;
 
+import java.time.Clock;
 import java.util.Arrays;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -41,6 +46,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 @ActiveProfiles("test")
 @Testcontainers
 @TestConstructor(autowireMode = TestConstructor.AutowireMode.ALL)
+@Import(AbstractIntegrationTest.FixedClockConfig.class)
 public abstract class AbstractIntegrationTest {
 
     // Testcontainers-managed shared containers for integration tests
@@ -447,5 +453,15 @@ public abstract class AbstractIntegrationTest {
         }
 
         return null;
+    }
+
+    @TestConfiguration
+    static class FixedClockConfig {
+
+        @Bean
+        @Primary
+        Clock fixedClock() {
+            return Clock.fixed(TestTime.FIXED_INSTANT, java.time.ZoneOffset.UTC);
+        }
     }
 }

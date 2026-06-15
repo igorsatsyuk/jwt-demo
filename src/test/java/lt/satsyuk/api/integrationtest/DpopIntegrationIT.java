@@ -8,6 +8,7 @@ import com.nimbusds.jose.crypto.RSASSASigner;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
 import lt.satsyuk.MainApplication;
+import lt.satsyuk.api.util.TestTime;
 import lt.satsyuk.api.util.WireMockIntegrationTest;
 import lt.satsyuk.dto.AppResponse;
 import lt.satsyuk.dto.KeycloakTokenResponse;
@@ -26,7 +27,6 @@ import lt.satsyuk.security.RateLimitingFilter;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.MessageDigest;
-import java.time.Instant;
 import java.util.Date;
 import java.util.UUID;
 
@@ -160,7 +160,7 @@ class DpopIntegrationIT extends WireMockIntegrationTest {
                                String jti) throws Exception {
         JWTClaimsSet claims = new JWTClaimsSet.Builder()
                 .jwtID(jti)
-                .issueTime(Date.from(Instant.now()))
+                .issueTime(Date.from(TestTime.FIXED_INSTANT))
                 .claim("htm", method)
                 .claim("htu", uri)
                 .claim("ath", ath(accessToken))

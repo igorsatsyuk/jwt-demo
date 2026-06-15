@@ -21,6 +21,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class SecurityServiceTest {
 
+    private static final Instant NOW = Instant.parse("2026-01-01T12:00:00Z");
     private final SecurityService securityService = new SecurityService();
 
     @AfterEach
@@ -38,8 +39,8 @@ class SecurityServiceTest {
         Jwt jwt = Jwt.withTokenValue("token")
                 .header("alg", "none")
                 .claim("azp", "client-jwt")
-                .issuedAt(Instant.now())
-                .expiresAt(Instant.now().plusSeconds(60))
+                .issuedAt(NOW)
+                .expiresAt(NOW.plusSeconds(60))
                 .build();
         JwtAuthenticationToken auth = new JwtAuthenticationToken(jwt);
         SecurityContextHolder.getContext().setAuthentication(auth);
@@ -92,8 +93,8 @@ class SecurityServiceTest {
         OAuth2AccessToken token = new OAuth2AccessToken(
                 OAuth2AccessToken.TokenType.BEARER,
                 "token",
-                Instant.now(),
-                Instant.now().plusSeconds(60)
+                NOW,
+                NOW.plusSeconds(60)
         );
         return new BearerTokenAuthentication(principal, token, principal.getAuthorities());
     }

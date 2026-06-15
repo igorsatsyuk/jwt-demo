@@ -5,6 +5,7 @@ import lt.satsyuk.dto.AppResponse;
 import lt.satsyuk.dto.CreateClientRequest;
 import lt.satsyuk.dto.RequestAcceptedResponse;
 import lt.satsyuk.dto.RequestStatusResponse;
+import lt.satsyuk.api.util.TestTime;
 import lt.satsyuk.model.Request;
 import lt.satsyuk.model.RequestStatus;
 import lt.satsyuk.model.RequestType;
@@ -81,7 +82,7 @@ class RequestServiceTest {
     @Test
     void getRequestStatusReturnsNestedJsonResponse() {
         UUID requestId = UUID.randomUUID();
-        OffsetDateTime now = OffsetDateTime.now();
+        OffsetDateTime now = TestTime.FIXED_OFFSET_DATE_TIME;
         Request request = Request.builder()
                 .id(requestId)
                 .type(RequestType.CLIENT_CREATE)
