@@ -8,7 +8,6 @@ import com.nimbusds.jose.crypto.RSASSASigner;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
 import lt.satsyuk.MainApplication;
-import lt.satsyuk.api.util.TestTime;
 import lt.satsyuk.api.util.WireMockIntegrationTest;
 import lt.satsyuk.dto.AppResponse;
 import lt.satsyuk.dto.KeycloakTokenResponse;
@@ -27,6 +26,7 @@ import lt.satsyuk.security.RateLimitingFilter;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.MessageDigest;
+import java.time.Clock;
 import java.util.Date;
 import java.util.UUID;
 
@@ -42,13 +42,16 @@ import static org.springframework.http.MediaType.APPLICATION_JSON_VALUE;
 class DpopIntegrationIT extends WireMockIntegrationTest {
 
     private final ClientRepository clientRepository;
+    private final Clock clock;
 
     DpopIntegrationIT(@Qualifier("keycloakProperties") KeycloakProperties props,
                       CacheManager cacheManager,
                       RateLimitingFilter rateLimitingFilter,
-                      ClientRepository clientRepository) {
+                      ClientRepository clientRepository,
+                      Clock clock) {
         super(props, cacheManager, rateLimitingFilter);
         this.clientRepository = clientRepository;
+        this.clock = clock;
     }
 
     @Test
@@ -160,7 +163,7 @@ class DpopIntegrationIT extends WireMockIntegrationTest {
                                String jti) throws Exception {
         JWTClaimsSet claims = new JWTClaimsSet.Builder()
                 .jwtID(jti)
-                .issueTime(Date.from(TestTime.FIXED_INSTANT))
+                .issueTime(Date.from(clock.instant()))
                 .claim("htm", method)
                 .claim("htu", uri)
                 .claim("ath", ath(accessToken))
