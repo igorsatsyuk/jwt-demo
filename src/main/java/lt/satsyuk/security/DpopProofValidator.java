@@ -23,7 +23,6 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Clock;
 import java.time.Instant;
-import java.util.Date;
 
 @Component
 public class DpopProofValidator {
@@ -169,13 +168,12 @@ public class DpopProofValidator {
     }
 
     private void validateIssueTime(JWTClaimsSet claims) {
-        Date issueTime = claims.getIssueTime();
-        if (issueTime == null) {
+        Instant iat = claims.getIssueTime() != null ? claims.getIssueTime().toInstant() : null;
+        if (iat == null) {
             throw new DpopProofValidationException("DPoP proof issue time is missing");
         }
 
         Instant now = Instant.now(clock);
-        Instant iat = issueTime.toInstant();
         Instant notBefore = now.minus(properties.getMaxProofAge()).minus(properties.getClockSkew());
         Instant notAfter = now.plus(properties.getClockSkew());
 
