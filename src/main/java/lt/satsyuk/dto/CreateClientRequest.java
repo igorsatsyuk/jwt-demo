@@ -5,7 +5,12 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
+import java.util.UUID;
+
 public record CreateClientRequest(
+
+        @Schema(description = "Idempotency key. When provided, it is used as the Request id instead of generating a new one.")
+        UUID idempotencyKey,
 
         @NotBlank(message = "{validation.firstName.required}")
         @Size(max = 100)

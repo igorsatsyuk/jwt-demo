@@ -8,6 +8,7 @@ import org.springframework.context.MessageSource;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -105,6 +106,24 @@ public class GlobalExceptionHandler {
                 .status(HttpStatus.CONFLICT)
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(AppResponse.<Void>error(AppResponse.ErrorCode.CONFLICT.getCode(), message));
+    }
+
+    @ExceptionHandler(IdempotencyKeyConflictException.class)
+    public ResponseEntity<AppResponse<Void>> handleIdempotencyKeyConflict(IdempotencyKeyConflictException ex) {
+        String message = messageService.getMessage(ex.getMessageCode(), new Object[]{ex.getIdempotencyKey()});
+        return ResponseEntity
+                .status(HttpStatus.CONFLICT)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(AppResponse.<Void>error(AppResponse.ErrorCode.CONFLICT.getCode(), message));
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<AppResponse<Void>> handleHttpMessageNotReadable(HttpMessageNotReadableException ex) {
+        String message = messageService.getMessage("error.request.invalidPayload");
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(AppResponse.<Void>error(AppResponse.ErrorCode.BAD_REQUEST.getCode(), message));
     }
 
     @ExceptionHandler(Exception.class)

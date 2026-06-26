@@ -36,6 +36,7 @@ class CreateClientRequestTest {
     @Test
     void validRequestHasNoViolations() {
         CreateClientRequest request = new CreateClientRequest(
+                null,
                 JOHN,
                 DOE,
                 PHONE
@@ -49,6 +50,7 @@ class CreateClientRequestTest {
     @Test
     void blankFirstNameIsRejected() {
         CreateClientRequest request = new CreateClientRequest(
+                null,
                 " ",
                 DOE,
                 PHONE
@@ -66,6 +68,7 @@ class CreateClientRequestTest {
     @Test
     void blankLastNameIsRejected() {
         CreateClientRequest request = new CreateClientRequest(
+                null,
                 JOHN,
                 "",
                 PHONE
@@ -83,6 +86,7 @@ class CreateClientRequestTest {
     @Test
     void blankPhoneIsRejected() {
         CreateClientRequest request = new CreateClientRequest(
+                null,
                 JOHN,
                 DOE,
                 ""
@@ -101,6 +105,7 @@ class CreateClientRequestTest {
     void firstNameOverMaxLengthIsRejected() {
         String tooLong = "a".repeat(101);
         CreateClientRequest request = new CreateClientRequest(
+                null,
                 tooLong,
                 DOE,
                 PHONE
@@ -116,6 +121,7 @@ class CreateClientRequestTest {
     void lastNameOverMaxLengthIsRejected() {
         String tooLong = "b".repeat(101);
         CreateClientRequest request = new CreateClientRequest(
+                null,
                 JOHN,
                 tooLong,
                 PHONE
@@ -130,6 +136,7 @@ class CreateClientRequestTest {
     @Test
     void phonePatternIsRejected() {
         CreateClientRequest request = new CreateClientRequest(
+                null,
                 JOHN,
                 DOE,
                 "12-345"
@@ -147,11 +154,13 @@ class CreateClientRequestTest {
     @Test
     void phonePatternAcceptsMinAndMaxLengths() {
         CreateClientRequest min = new CreateClientRequest(
+                null,
                 JOHN,
                 DOE,
                 "1234567"
         );
         CreateClientRequest max = new CreateClientRequest(
+                null,
                 JOHN,
                 DOE,
                 "+123456789012345"
