@@ -6,6 +6,7 @@ import lt.satsyuk.dto.AppResponse;
 import lt.satsyuk.dto.CreateClientRequest;
 import lt.satsyuk.dto.RequestAcceptedResponse;
 import lt.satsyuk.dto.RequestStatusResponse;
+import lt.satsyuk.exception.IdempotencyKeyConflictException;
 import lt.satsyuk.exception.RequestNotFoundException;
 import lt.satsyuk.model.Request;
 import lt.satsyuk.model.RequestStatus;
@@ -18,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -32,6 +34,18 @@ public class RequestService {
 
     public RequestAcceptedResponse submitClientCreateRequest(CreateClientRequest createClientRequest) {
         OffsetDateTime now = now();
+
+        if (createClientRequest.idempotencyKey() != null) {
+            Optional<Request> existing = requestRepository.findById(createClientRequest.idempotencyKey());
+            if (existing.isPresent()) {
+                Request request = existing.get();
+                if (request.getRequestData().equals(writeJson(createClientRequest))) {
+                    return new RequestAcceptedResponse(request.getId(), request.getStatus());
+                }
+                throw new IdempotencyKeyConflictException(createClientRequest.idempotencyKey().toString());
+            }
+        }
+
         UUID requestId = createClientRequest.idempotencyKey() != null
                 ? createClientRequest.idempotencyKey()
                 : UUID.randomUUID();

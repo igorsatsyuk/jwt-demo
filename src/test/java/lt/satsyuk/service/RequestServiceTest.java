@@ -6,6 +6,7 @@ import lt.satsyuk.dto.CreateClientRequest;
 import lt.satsyuk.dto.RequestAcceptedResponse;
 import lt.satsyuk.dto.RequestStatusResponse;
 import lt.satsyuk.api.util.TestTime;
+import lt.satsyuk.exception.IdempotencyKeyConflictException;
 import lt.satsyuk.model.Request;
 import lt.satsyuk.model.RequestStatus;
 import lt.satsyuk.model.RequestType;
@@ -27,6 +28,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -93,6 +95,50 @@ class RequestServiceTest {
 
         assertThat(savedRequest.getId()).isEqualTo(idempotencyKey);
         assertThat(response.requestId()).isEqualTo(idempotencyKey);
+    }
+
+    @Test
+    void submitClientCreateRequestReturnsExistingRequestForSameIdempotencyKeyAndPayload() throws Exception {
+        UUID idempotencyKey = UUID.randomUUID();
+        CreateClientRequest createClientRequest = new CreateClientRequest(idempotencyKey, "John", "Doe", "+37061234567");
+        OffsetDateTime now = OffsetDateTime.now();
+        Request existingRequest = Request.builder()
+                .id(idempotencyKey)
+                .type(RequestType.CLIENT_CREATE)
+                .status(RequestStatus.COMPLETED)
+                .createdAt(now)
+                .statusChangedAt(now)
+                .requestData(objectMapper.writeValueAsString(createClientRequest))
+                .build();
+        when(requestRepository.findById(idempotencyKey)).thenReturn(Optional.of(existingRequest));
+
+        RequestAcceptedResponse response = requestService.submitClientCreateRequest(createClientRequest);
+
+        assertThat(response.requestId()).isEqualTo(idempotencyKey);
+        assertThat(response.status()).isEqualTo(RequestStatus.COMPLETED);
+        verify(requestRepository, never()).save(any(Request.class));
+        verify(requestSchedulerService, never()).scheduleClientCreateRequest(any(UUID.class));
+    }
+
+    @Test
+    void submitClientCreateRequestThrowsConflictForSameIdempotencyKeyDifferentPayload() throws Exception {
+        UUID idempotencyKey = UUID.randomUUID();
+        CreateClientRequest incoming = new CreateClientRequest(idempotencyKey, "John", "Doe", "+37061234567");
+        CreateClientRequest existingPayload = new CreateClientRequest(idempotencyKey, "Jane", "Roe", "+37069999999");
+        OffsetDateTime now = OffsetDateTime.now();
+        Request existingRequest = Request.builder()
+                .id(idempotencyKey)
+                .type(RequestType.CLIENT_CREATE)
+                .status(RequestStatus.COMPLETED)
+                .createdAt(now)
+                .statusChangedAt(now)
+                .requestData(objectMapper.writeValueAsString(existingPayload))
+                .build();
+        when(requestRepository.findById(idempotencyKey)).thenReturn(Optional.of(existingRequest));
+
+        assertThatThrownBy(() -> requestService.submitClientCreateRequest(incoming))
+                .isInstanceOf(IdempotencyKeyConflictException.class)
+                .hasMessageContaining(idempotencyKey.toString());
     }
 
     @Test
