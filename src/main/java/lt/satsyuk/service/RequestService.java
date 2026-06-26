@@ -32,8 +32,11 @@ public class RequestService {
 
     public RequestAcceptedResponse submitClientCreateRequest(CreateClientRequest createClientRequest) {
         OffsetDateTime now = now();
+        UUID requestId = createClientRequest.idempotencyKey() != null
+                ? createClientRequest.idempotencyKey()
+                : UUID.randomUUID();
         Request request = Request.builder()
-                .id(UUID.randomUUID())
+                .id(requestId)
                 .type(RequestType.CLIENT_CREATE)
                 .status(RequestStatus.PENDING)
                 .createdAt(now)

@@ -69,7 +69,7 @@ class ClientIntegrationIT extends KeycloakIntegrationTest {
     void create_client_success_and_persistence() {
         String token = loginAndGetAccess(USERNAME, USER_PASSWORD);
 
-        CreateClientRequest req = new CreateClientRequest(JOHN, DOE, PHONE);
+        CreateClientRequest req = new CreateClientRequest(null, JOHN, DOE, PHONE);
 
         RequestAcceptedResponse accepted = postAndReturnData(clientUrl, token, req, HttpStatus.ACCEPTED, RequestAcceptedResponse.class);
 
@@ -105,7 +105,7 @@ class ClientIntegrationIT extends KeycloakIntegrationTest {
         repo.save(existing);
 
         String token = loginAndGetAccess(USERNAME, USER_PASSWORD);
-        CreateClientRequest req = new CreateClientRequest(JOHN, DOE, PHONE);
+        CreateClientRequest req = new CreateClientRequest(null, JOHN, DOE, PHONE);
 
         RequestAcceptedResponse accepted = postAndReturnData(clientUrl, token, req, HttpStatus.ACCEPTED, RequestAcceptedResponse.class);
         RequestStatusResponse statusResponse = awaitRequestStatus(token, accepted.requestId(), RequestStatus.FAILED);
@@ -239,7 +239,7 @@ class ClientIntegrationIT extends KeycloakIntegrationTest {
     // negative tests
     @Test
     void create_client_unauthorized() {
-        CreateClientRequest req = new CreateClientRequest("No", "Token", "+37061111111");
+        CreateClientRequest req = new CreateClientRequest(null, "No", "Token", "+37061111111");
 
         ResponseEntity<AppResponse<Object>> resp = requestPost(clientUrl, null, req);
 
@@ -251,7 +251,7 @@ class ClientIntegrationIT extends KeycloakIntegrationTest {
     @Test
     void create_client_forbidden_when_user_has_no_role() {
         String token = loginAndGetAccess(ADMIN, ADMIN_PASSWORD);
-        CreateClientRequest req = new CreateClientRequest("No", "Role", "+37062222222");
+        CreateClientRequest req = new CreateClientRequest(null, "No", "Role", "+37062222222");
 
         ResponseEntity<AppResponse<Object>> resp = requestPost(clientUrl, token, null, req);
 
@@ -264,7 +264,7 @@ class ClientIntegrationIT extends KeycloakIntegrationTest {
     void create_client_validation_error() {
         String token = loginAndGetAccess(USERNAME, USER_PASSWORD);
         // invalid phone and missing firstName
-        CreateClientRequest req = new CreateClientRequest("", DOE, "abc");
+        CreateClientRequest req = new CreateClientRequest(null, "", DOE, "abc");
 
         ResponseEntity<AppResponse<Object>> response = requestPost(clientUrl, token, null, req);
 
@@ -282,7 +282,7 @@ class ClientIntegrationIT extends KeycloakIntegrationTest {
     void create_client_validation_error_russian_locale() {
         String token = loginAndGetAccess(USERNAME, USER_PASSWORD);
         // invalid phone and missing firstName
-        CreateClientRequest req = new CreateClientRequest("", DOE, "abc");
+        CreateClientRequest req = new CreateClientRequest(null, "", DOE, "abc");
 
         ResponseEntity<AppResponse<Object>> response = requestPost(clientUrl, token, "ru", req);
 

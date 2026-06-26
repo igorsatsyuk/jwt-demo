@@ -51,7 +51,7 @@ class ClientServiceTest {
 
     @Test
     void createThrowsWhenPhoneAlreadyExists() {
-        CreateClientRequest request = new CreateClientRequest("John", "Doe", "+37060000001");
+        CreateClientRequest request = new CreateClientRequest(null, "John", "Doe", "+37060000001");
         when(clientRepository.existsByPhone(request.phone())).thenReturn(true);
 
         assertThatThrownBy(() -> clientService.create(request))
@@ -61,7 +61,7 @@ class ClientServiceTest {
 
     @Test
     void createSavesClientAndCreatesZeroBalanceAccount() {
-        CreateClientRequest request = new CreateClientRequest("John", "Doe", "+37060000001");
+        CreateClientRequest request = new CreateClientRequest(null, "John", "Doe", "+37060000001");
         Client entity = Client.builder().firstName("John").lastName("Doe").phone("+37060000001").build();
         Client saved = Client.builder().id(7L).firstName("John").lastName("Doe").phone("+37060000001").build();
         ClientResponse response = new ClientResponse(7L, "John", "Doe", "+37060000001");
@@ -83,7 +83,7 @@ class ClientServiceTest {
 
     @Test
     void createMapsClientSaveConstraintViolationToPhoneAlreadyExistsException() {
-        CreateClientRequest request = new CreateClientRequest("John", "Doe", "+37060000001");
+        CreateClientRequest request = new CreateClientRequest(null, "John", "Doe", "+37060000001");
         Client entity = Client.builder().firstName("John").lastName("Doe").phone("+37060000001").build();
 
         when(clientRepository.existsByPhone(request.phone())).thenReturn(false);
@@ -99,7 +99,7 @@ class ClientServiceTest {
 
     @Test
     void createDoesNotMapAccountSaveFailureToPhoneAlreadyExistsException() {
-        CreateClientRequest request = new CreateClientRequest("John", "Doe", "+37060000001");
+        CreateClientRequest request = new CreateClientRequest(null, "John", "Doe", "+37060000001");
         Client entity = Client.builder().firstName("John").lastName("Doe").phone("+37060000001").build();
         Client saved = Client.builder().id(7L).firstName("John").lastName("Doe").phone("+37060000001").build();
 

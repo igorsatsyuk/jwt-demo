@@ -14,6 +14,7 @@ class ClientMapperTest {
     @Test
     void toEntityMapsFieldsAndIgnoresId() {
         CreateClientRequest request = new CreateClientRequest(
+                null,
                 "John",
                 "Doe",
                 "+12345678901"

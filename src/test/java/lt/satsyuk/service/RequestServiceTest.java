@@ -62,7 +62,7 @@ class RequestServiceTest {
 
     @Test
     void submitClientCreateRequestStoresSerializedPayloadAndSchedulesJob() throws Exception {
-        CreateClientRequest createClientRequest = new CreateClientRequest("John", "Doe", "+37061234567");
+        CreateClientRequest createClientRequest = new CreateClientRequest(null, "John", "Doe", "+37061234567");
         when(requestRepository.save(any(Request.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         RequestAcceptedResponse response = requestService.submitClientCreateRequest(createClientRequest);
@@ -77,6 +77,22 @@ class RequestServiceTest {
         assertThat(savedRequest.getStatus()).isEqualTo(RequestStatus.PENDING);
         assertThat(savedRequest.getRequestData()).isEqualTo(objectMapper.writeValueAsString(createClientRequest));
         verify(requestSchedulerService).scheduleClientCreateRequest(savedRequest.getId());
+    }
+
+    @Test
+    void submitClientCreateRequestUsesIdempotencyKeyAsRequestId() throws Exception {
+        UUID idempotencyKey = UUID.randomUUID();
+        CreateClientRequest createClientRequest = new CreateClientRequest(idempotencyKey, "John", "Doe", "+37061234567");
+        when(requestRepository.save(any(Request.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        RequestAcceptedResponse response = requestService.submitClientCreateRequest(createClientRequest);
+
+        ArgumentCaptor<Request> requestCaptor = ArgumentCaptor.forClass(Request.class);
+        verify(requestRepository).save(requestCaptor.capture());
+        Request savedRequest = requestCaptor.getValue();
+
+        assertThat(savedRequest.getId()).isEqualTo(idempotencyKey);
+        assertThat(response.requestId()).isEqualTo(idempotencyKey);
     }
 
     @Test
@@ -115,7 +131,7 @@ class RequestServiceTest {
 
     @Test
     void submitClientCreateRequestMarksProcessingErrorWhenSchedulingFails() throws Exception {
-        CreateClientRequest createClientRequest = new CreateClientRequest("John", "Doe", "+37061234567");
+        CreateClientRequest createClientRequest = new CreateClientRequest(null, "John", "Doe", "+37061234567");
         when(requestRepository.save(any(Request.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(messageService.getMessage("error.request.schedulingFailed")).thenReturn("Failed to schedule request processing");
         doThrow(new SchedulerException("boom"))
