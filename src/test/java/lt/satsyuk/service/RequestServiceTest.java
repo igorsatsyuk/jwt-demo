@@ -82,7 +82,7 @@ class RequestServiceTest {
     }
 
     @Test
-    void submitClientCreateRequestUsesIdempotencyKeyAsRequestId() throws Exception {
+    void submitClientCreateRequestUsesIdempotencyKeyAsRequestId() {
         UUID idempotencyKey = UUID.randomUUID();
         CreateClientRequest createClientRequest = new CreateClientRequest(idempotencyKey, "John", "Doe", "+37061234567");
         when(requestRepository.save(any(Request.class))).thenAnswer(invocation -> invocation.getArgument(0));
