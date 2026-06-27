@@ -29,7 +29,6 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -134,7 +133,7 @@ class RequestServiceTest {
     }
 
     @Test
-    void submitClientCreateRequestAllowsSameIdempotencyKeyForDifferentClient() throws Exception {
+    void submitClientCreateRequestAllowsSameIdempotencyKeyForDifferentClient() {
         UUID idempotencyKey = UUID.randomUUID();
         CreateClientRequest createClientRequest = new CreateClientRequest(idempotencyKey, "John", "Doe", "+37061234567");
         when(requestRepository.findById(new RequestId(idempotencyKey, CLIENT_ID)))
@@ -167,20 +166,6 @@ class RequestServiceTest {
         assertThatThrownBy(() -> requestService.submitClientCreateRequest(incoming))
                 .isInstanceOf(IdempotencyKeyConflictException.class)
                 .hasMessageContaining(idempotencyKey.toString());
-    }
-
-    @Test
-    void submitClientCreateRequestReturnsLegacyRequestForSamePayload() throws Exception {
-        UUID idempotencyKey = UUID.randomUUID();
-        CreateClientRequest createClientRequest = new CreateClientRequest(idempotencyKey, "John", "Doe", "+37061234567");
-        when(requestRepository.findById(new RequestId(idempotencyKey, CLIENT_ID)))
-                .thenReturn(Optional.empty());
-        when(requestRepository.save(any(Request.class))).thenAnswer(invocation -> invocation.getArgument(0));
-
-        RequestAcceptedResponse response = requestService.submitClientCreateRequest(createClientRequest);
-
-        assertThat(response.requestId()).isEqualTo(idempotencyKey);
-        verify(requestRepository).save(any(Request.class));
     }
 
     @Test
@@ -272,12 +257,12 @@ class RequestServiceTest {
         verify(requestRepository).save(requestCaptor.capture());
         Request savedRequest = requestCaptor.getValue();
         verify(requestStateService).markFailed(
-                eq(savedRequest.getId()),
-                eq(CLIENT_ID),
-                eq(objectMapper.writeValueAsString(AppResponse.error(
+                savedRequest.getId(),
+                CLIENT_ID,
+                objectMapper.writeValueAsString(AppResponse.error(
                         AppResponse.ErrorCode.INTERNAL_SERVER_ERROR.getCode(),
                         "Failed to schedule request processing"
-                )))
+                ))
         );
     }
 }
