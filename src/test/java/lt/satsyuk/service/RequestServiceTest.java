@@ -7,6 +7,7 @@ import lt.satsyuk.dto.RequestAcceptedResponse;
 import lt.satsyuk.dto.RequestStatusResponse;
 import lt.satsyuk.api.util.TestTime;
 import lt.satsyuk.exception.IdempotencyKeyConflictException;
+import lt.satsyuk.exception.RequestNotFoundException;
 import lt.satsyuk.model.Request;
 import lt.satsyuk.model.RequestStatus;
 import lt.satsyuk.model.RequestType;
@@ -49,16 +50,21 @@ class RequestServiceTest {
     @Mock
     private MessageService messageService;
 
+    @Mock
+    private SecurityService securityService;
+
     private RequestService requestService;
 
     @BeforeEach
     void setUp() {
+        when(securityService.clientId()).thenReturn("spring-app");
         requestService = new RequestService(
                 requestRepository,
                 requestSchedulerService,
                 requestStateService,
                 objectMapper,
-                messageService
+                messageService,
+                securityService
         );
     }
 
@@ -109,6 +115,7 @@ class RequestServiceTest {
                 .createdAt(now)
                 .statusChangedAt(now)
                 .requestData(objectMapper.writeValueAsString(createClientRequest))
+                .authClientId("spring-app")
                 .build();
         when(requestRepository.findById(idempotencyKey)).thenReturn(Optional.of(existingRequest));
 
@@ -133,10 +140,32 @@ class RequestServiceTest {
                 .createdAt(now)
                 .statusChangedAt(now)
                 .requestData(objectMapper.writeValueAsString(existingPayload))
+                .authClientId("spring-app")
                 .build();
         when(requestRepository.findById(idempotencyKey)).thenReturn(Optional.of(existingRequest));
 
         assertThatThrownBy(() -> requestService.submitClientCreateRequest(incoming))
+                .isInstanceOf(IdempotencyKeyConflictException.class)
+                .hasMessageContaining(idempotencyKey.toString());
+    }
+
+    @Test
+    void submitClientCreateRequestThrowsConflictForSameIdempotencyKeyDifferentAuthClientId() throws Exception {
+        UUID idempotencyKey = UUID.randomUUID();
+        CreateClientRequest createClientRequest = new CreateClientRequest(idempotencyKey, "John", "Doe", "+37061234567");
+        OffsetDateTime now = OffsetDateTime.now();
+        Request existingRequest = Request.builder()
+                .id(idempotencyKey)
+                .type(RequestType.CLIENT_CREATE)
+                .status(RequestStatus.COMPLETED)
+                .createdAt(now)
+                .statusChangedAt(now)
+                .requestData(objectMapper.writeValueAsString(createClientRequest))
+                .authClientId("other-client")
+                .build();
+        when(requestRepository.findById(idempotencyKey)).thenReturn(Optional.of(existingRequest));
+
+        assertThatThrownBy(() -> requestService.submitClientCreateRequest(createClientRequest))
                 .isInstanceOf(IdempotencyKeyConflictException.class)
                 .hasMessageContaining(idempotencyKey.toString());
     }
@@ -153,6 +182,7 @@ class RequestServiceTest {
                 .statusChangedAt(now)
                 .requestData("{\"firstName\":\"John\"}")
                 .responseData("{\"code\":0,\"data\":{\"id\":1,\"phone\":\"+37061234567\"},\"message\":\"OK\"}")
+                .authClientId("spring-app")
                 .build();
         when(requestRepository.findById(requestId)).thenReturn(Optional.of(request));
 
@@ -173,6 +203,25 @@ class RequestServiceTest {
         assertThat(data)
                 .containsEntry("id", 1)
                 .containsEntry("phone", "+37061234567");
+    }
+
+    @Test
+    void getRequestStatusThrowsNotFoundWhenAuthClientIdMismatch() {
+        UUID requestId = UUID.randomUUID();
+        OffsetDateTime now = TestTime.FIXED_OFFSET_DATE_TIME;
+        Request request = Request.builder()
+                .id(requestId)
+                .type(RequestType.CLIENT_CREATE)
+                .status(RequestStatus.COMPLETED)
+                .createdAt(now)
+                .statusChangedAt(now)
+                .requestData("{\"firstName\":\"John\"}")
+                .authClientId("other-client")
+                .build();
+        when(requestRepository.findById(requestId)).thenReturn(Optional.of(request));
+
+        assertThatThrownBy(() -> requestService.getRequestStatus(requestId))
+                .isInstanceOf(RequestNotFoundException.class);
     }
 
     @Test

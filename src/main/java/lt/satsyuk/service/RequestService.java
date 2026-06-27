@@ -31,15 +31,18 @@ public class RequestService {
     private final RequestStateService requestStateService;
     private final ObjectMapper objectMapper;
     private final MessageService messageService;
+    private final SecurityService securityService;
 
     public RequestAcceptedResponse submitClientCreateRequest(CreateClientRequest createClientRequest) {
         OffsetDateTime now = now();
+        String currentClientId = securityService.clientId();
 
         if (createClientRequest.idempotencyKey() != null) {
             Optional<Request> existing = requestRepository.findById(createClientRequest.idempotencyKey());
             if (existing.isPresent()) {
                 Request request = existing.get();
-                if (request.getRequestData().equals(writeJson(createClientRequest))) {
+                if (request.getAuthClientId().equals(currentClientId)
+                        && request.getRequestData().equals(writeJson(createClientRequest))) {
                     return new RequestAcceptedResponse(request.getId(), request.getStatus());
                 }
                 throw new IdempotencyKeyConflictException(createClientRequest.idempotencyKey().toString());
@@ -56,6 +59,7 @@ public class RequestService {
                 .createdAt(now)
                 .statusChangedAt(now)
                 .requestData(writeJson(createClientRequest))
+                .authClientId(currentClientId)
                 .build();
 
         Request saved = requestRepository.save(request);
@@ -77,6 +81,9 @@ public class RequestService {
     public RequestStatusResponse getRequestStatus(UUID requestId) {
         Request request = requestRepository.findById(requestId)
                 .orElseThrow(() -> new RequestNotFoundException(requestId));
+        if (!request.getAuthClientId().equals(securityService.clientId())) {
+            throw new RequestNotFoundException(requestId);
+        }
         return new RequestStatusResponse(
                 request.getId(),
                 request.getType(),

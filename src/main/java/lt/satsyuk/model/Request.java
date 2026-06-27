@@ -48,6 +48,9 @@ public class Request {
     @ColumnTransformer(read = "response_data::text", write = "?::jsonb")
     private String responseData;
 
+    @Column(name = "auth_client_id", nullable = false)
+    private String authClientId;
+
     public void markProcessing(OffsetDateTime changedAt) {
         this.status = RequestStatus.PROCESSING;
         this.statusChangedAt = changedAt;
