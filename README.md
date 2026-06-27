@@ -229,7 +229,7 @@ The resource server uses **service credentials** (env vars) for introspection.
 
 `POST /api/clients` accepts a request for background processing instead of creating the `client` row synchronously.
 
-1. The API validates the request body.
+1. The API validates the request body (optional `idempotencyKey` may be provided).
 2. A new `Request` row is persisted with `type=CLIENT_CREATE` and `status=PENDING`.
 3. The original payload is stored in PostgreSQL `jsonb` (`request_data`).
 4. A persistent Quartz job is created in PostgreSQL (`QRTZ_*` tables).
@@ -595,18 +595,38 @@ Why use them
 - They avoid unsafe unchecked casts (LinkedHashMap → POJO) by converting raw `data` into the requested DTO using Jackson.
 - They make positive test code concise and resilient to deserialization differences.
 
-Example (creating a client and then fetching it by id):
+Example (submitting a client creation request, then polling for result):
 
 ```java
 class ClientIntegrationExample {
     void createsAndFetchesClient() {
-        CreateClientRequest req = new CreateClientRequest("John", "Doe", "+37061234567");
-        ClientResponse created = postAndGetData(clientUrl, token, req, ClientResponse.class);
-        assertThat(created.id()).isNotNull();
+        CreateClientRequest req = new CreateClientRequest(null, "John", "Doe", "+37061234567");
 
-        ClientResponse fetched = getAndGetData(clientUrl + "/" + created.id(), token, ClientResponse.class);
-        assertThat(fetched.id()).isEqualTo(created.id());
-        assertThat(fetched.phone()).isEqualTo(created.phone());
+        // 1. Submit — returns 202 Accepted
+        RequestAcceptedResponse accepted = postAndReturnData(
+                clientUrl, token, req, HttpStatus.ACCEPTED, RequestAcceptedResponse.class);
+        assertThat(accepted.requestId()).isNotNull();
+        assertThat(accepted.status()).isEqualTo(RequestStatus.PENDING);
+
+        // 2. Poll until terminal status
+        await()
+                .atMost(15, TimeUnit.SECONDS)
+                .pollInterval(250, TimeUnit.MILLISECONDS)
+                .untilAsserted(() -> {
+                    RequestStatusResponse status = getAndReturnData(
+                            requestUrl + "/" + accepted.requestId(), token, RequestStatusResponse.class);
+                    assertThat(status.status()).isEqualTo(RequestStatus.COMPLETED);
+                });
+
+        // 3. Read nested AppResponse<ClientResponse>
+        RequestStatusResponse finalStatus = getAndReturnData(
+                requestUrl + "/" + accepted.requestId(), token, RequestStatusResponse.class);
+        AppResponse<ClientResponse> wrapper = objectMapper.convertValue(
+                finalStatus.response(), new TypeReference<>() {});
+        ClientResponse created = wrapper.data();
+
+        assertThat(created.firstName()).isEqualTo("John");
+        assertThat(created.phone()).isEqualTo("+37061234567");
     }
 }
 ```
