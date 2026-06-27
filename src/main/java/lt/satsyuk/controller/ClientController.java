@@ -45,6 +45,8 @@ public class ClientController {
             content = @Content(mediaType = "application/json"))
     @ApiResponse(responseCode = "403", description = "Forbidden",
             content = @Content(mediaType = "application/json"))
+    @ApiResponse(responseCode = "409", description = "Idempotency key conflict",
+            content = @Content(mediaType = "application/json"))
     public ResponseEntity<AppResponse<RequestAcceptedResponse>> create(@Valid @RequestBody CreateClientRequest req) {
         return ResponseEntity.accepted().body(AppResponse.ok(requestService.submitClientCreateRequest(req)));
     }

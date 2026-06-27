@@ -205,12 +205,12 @@ Accept a new asynchronous client creation request.
 
 **Validation Rules:**
 
-| Field          | Rules                                                         |
-|----------------|---------------------------------------------------------------|
-| idempotencyKey | Optional UUID; when provided, used as the Request id          |
-| firstName      | Required, 1–50 characters                                     |
-| lastName       | Required, 1–50 characters                                     |
-| phone          | Required, must match pattern `+[0-9]{7,15}`                   |
+| Field          | Rules                                                           |
+|----------------|-----------------------------------------------------------------|
+| idempotencyKey | Optional UUID; when provided, used as the Request id            |
+| firstName      | Required, max 100 characters                                    |
+| lastName       | Required, max 100 characters                                    |
+| phone          | Required, must match pattern `\+?\d{7,15}` (optional `+` prefix) |
 
 **Success Response (202):**
 ```json

@@ -595,18 +595,24 @@ Why use them
 - They avoid unsafe unchecked casts (LinkedHashMap → POJO) by converting raw `data` into the requested DTO using Jackson.
 - They make positive test code concise and resilient to deserialization differences.
 
-Example (creating a client and then fetching it by id):
+Example (submitting a client creation request, then polling for result):
 
 ```java
 class ClientIntegrationExample {
     void createsAndFetchesClient() {
         CreateClientRequest req = new CreateClientRequest(null, "John", "Doe", "+37061234567");
-        ClientResponse created = postAndGetData(clientUrl, token, req, ClientResponse.class);
-        assertThat(created.id()).isNotNull();
 
-        ClientResponse fetched = getAndGetData(clientUrl + "/" + created.id(), token, ClientResponse.class);
-        assertThat(fetched.id()).isEqualTo(created.id());
-        assertThat(fetched.phone()).isEqualTo(created.phone());
+        ResponseEntity<AppResponse<RequestAcceptedResponse>> accepted =
+                postWithStatus(clientUrl, token, req, new ParameterizedTypeReference<>() {});
+        assertThat(accepted.getStatusCode()).isEqualTo(HttpStatus.ACCEPTED);
+        UUID requestId = accepted.getBody().data().requestId();
+
+        RequestStatusResponse status = pollUntilCompleted(requestId, token);
+        assertThat(status.status()).isEqualTo(RequestStatus.COMPLETED);
+
+        ClientResponse created = status.response().data();
+        assertThat(created.firstName()).isEqualTo("John");
+        assertThat(created.phone()).isEqualTo("+37061234567");
     }
 }
 ```
