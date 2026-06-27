@@ -602,15 +602,29 @@ class ClientIntegrationExample {
     void createsAndFetchesClient() {
         CreateClientRequest req = new CreateClientRequest(null, "John", "Doe", "+37061234567");
 
-        ResponseEntity<AppResponse<RequestAcceptedResponse>> accepted =
-                postWithStatus(clientUrl, token, req, new ParameterizedTypeReference<>() {});
-        assertThat(accepted.getStatusCode()).isEqualTo(HttpStatus.ACCEPTED);
-        UUID requestId = accepted.getBody().data().requestId();
+        // 1. Submit — returns 202 Accepted
+        RequestAcceptedResponse accepted = postAndReturnData(
+                clientUrl, token, req, HttpStatus.ACCEPTED, RequestAcceptedResponse.class);
+        assertThat(accepted.requestId()).isNotNull();
+        assertThat(accepted.status()).isEqualTo(RequestStatus.PENDING);
 
-        RequestStatusResponse status = pollUntilCompleted(requestId, token);
-        assertThat(status.status()).isEqualTo(RequestStatus.COMPLETED);
+        // 2. Poll until terminal status
+        await()
+                .atMost(15, TimeUnit.SECONDS)
+                .pollInterval(250, TimeUnit.MILLISECONDS)
+                .untilAsserted(() -> {
+                    RequestStatusResponse status = getAndReturnData(
+                            requestUrl + "/" + accepted.requestId(), token, RequestStatusResponse.class);
+                    assertThat(status.status()).isEqualTo(RequestStatus.COMPLETED);
+                });
 
-        ClientResponse created = status.response().data();
+        // 3. Read nested AppResponse<ClientResponse>
+        RequestStatusResponse finalStatus = getAndReturnData(
+                requestUrl + "/" + accepted.requestId(), token, RequestStatusResponse.class);
+        AppResponse<ClientResponse> wrapper = objectMapper.convertValue(
+                finalStatus.response(), new TypeReference<>() {});
+        ClientResponse created = wrapper.data();
+
         assertThat(created.firstName()).isEqualTo("John");
         assertThat(created.phone()).isEqualTo("+37061234567");
     }
