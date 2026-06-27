@@ -196,6 +196,7 @@ Accept a new asynchronous client creation request.
 **Request Body:**
 ```json
 {
+  "idempotencyKey": "2e6a42a8-8bb7-4f7d-b4d6-71eb31ec8a13",
   "firstName": "John",
   "lastName": "Doe",
   "phone": "+37061234567"
@@ -204,11 +205,12 @@ Accept a new asynchronous client creation request.
 
 **Validation Rules:**
 
-| Field      | Rules                                               |
-|------------|-----------------------------------------------------|
-| firstName  | Required, 1–50 characters                           |
-| lastName   | Required, 1–50 characters                           |
-| phone      | Required, must match pattern `+[0-9]{7,15}`         |
+| Field          | Rules                                                         |
+|----------------|---------------------------------------------------------------|
+| idempotencyKey | Optional UUID; when provided, used as the Request id          |
+| firstName      | Required, 1–50 characters                                     |
+| lastName       | Required, 1–50 characters                                     |
+| phone          | Required, must match pattern `+[0-9]{7,15}`                   |
 
 **Success Response (202):**
 ```json
@@ -228,6 +230,7 @@ After that, poll `GET /api/requests/{requestId}` until the request reaches `COMP
 - `400` — Validation error
 - `401` — Missing or invalid token
 - `403` — Insufficient role
+- `409` — Idempotency key conflict (same key, different payload)
 - `429` — Rate limit exceeded (20 requests/minute)
 
 ---

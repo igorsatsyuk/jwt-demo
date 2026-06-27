@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Picked up newer BOM-managed versions of Tomcat, Logback, and AssertJ without changing application behavior
 
 ### Added
+- Optional `idempotencyKey` field on `POST /api/clients` — when provided, it becomes the Request id, enabling clients to safely retry requests; returns `409 Conflict` if the same key is reused with a different payload
 - Spring Boot + Keycloak OAuth2 proxy with dynamic client credentials
 - Opaque token introspection via Spring Security resource server
 - Role-based authorization (ADMIN, CLIENT_CREATE, CLIENT_GET, CLIENT_SEARCH, UPDATE_BALANCE)
