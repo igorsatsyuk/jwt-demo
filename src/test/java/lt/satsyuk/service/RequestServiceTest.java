@@ -226,15 +226,6 @@ class RequestServiceTest {
     @Test
     void getRequestStatusThrowsNotFoundWhenAuthClientIdMismatch() {
         UUID requestId = UUID.randomUUID();
-        OffsetDateTime now = TestTime.FIXED_OFFSET_DATE_TIME;
-        Request request = Request.builder()
-                .requestId(new RequestId(requestId, "other-client"))
-                .type(RequestType.CLIENT_CREATE)
-                .status(RequestStatus.COMPLETED)
-                .createdAt(now)
-                .statusChangedAt(now)
-                .requestData("{\"firstName\":\"John\"}")
-                .build();
         when(requestRepository.findByIdAndAuthClientId(requestId, CLIENT_ID)).thenReturn(Optional.empty());
         when(requestRepository.findByIdAndAuthClientId(requestId, "unknown")).thenReturn(Optional.empty());
 
