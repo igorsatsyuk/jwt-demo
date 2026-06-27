@@ -1,10 +1,10 @@
 package lt.satsyuk.model;
 
 import jakarta.persistence.Column;
+import jakarta.persistence.EmbeddedId;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
-import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import org.hibernate.annotations.ColumnTransformer;
 import lombok.AllArgsConstructor;
@@ -12,7 +12,6 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import java.time.OffsetDateTime;
-import java.util.UUID;
 
 @Entity
 @Table(name = "request")
@@ -22,9 +21,8 @@ import java.util.UUID;
 @Builder
 public class Request {
 
-    @Id
-    @Column(nullable = false, updatable = false)
-    private UUID id;
+    @EmbeddedId
+    private RequestId requestId;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "type", nullable = false, length = 50)
@@ -48,6 +46,14 @@ public class Request {
     @ColumnTransformer(read = "response_data::text", write = "?::jsonb")
     private String responseData;
 
+    public java.util.UUID getId() {
+        return requestId != null ? requestId.getId() : null;
+    }
+
+    public String getAuthClientId() {
+        return requestId != null ? requestId.getAuthClientId() : null;
+    }
+
     public void markProcessing(OffsetDateTime changedAt) {
         this.status = RequestStatus.PROCESSING;
         this.statusChangedAt = changedAt;
@@ -65,6 +71,3 @@ public class Request {
         this.statusChangedAt = changedAt;
     }
 }
-
-
-

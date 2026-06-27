@@ -9,6 +9,7 @@ import lt.satsyuk.dto.RequestStatusResponse;
 import lt.satsyuk.exception.IdempotencyKeyConflictException;
 import lt.satsyuk.exception.RequestNotFoundException;
 import lt.satsyuk.model.Request;
+import lt.satsyuk.model.RequestId;
 import lt.satsyuk.model.RequestStatus;
 import lt.satsyuk.model.RequestType;
 import lt.satsyuk.repository.RequestRepository;
@@ -26,17 +27,22 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class RequestService {
 
+    private static final String LEGACY_AUTH_CLIENT_ID = "unknown";
+
     private final RequestRepository requestRepository;
     private final RequestSchedulerService requestSchedulerService;
     private final RequestStateService requestStateService;
     private final ObjectMapper objectMapper;
     private final MessageService messageService;
+    private final SecurityService securityService;
 
     public RequestAcceptedResponse submitClientCreateRequest(CreateClientRequest createClientRequest) {
         OffsetDateTime now = now();
+        String currentClientId = securityService.clientId();
 
         if (createClientRequest.idempotencyKey() != null) {
-            Optional<Request> existing = requestRepository.findById(createClientRequest.idempotencyKey());
+            Optional<Request> existing = requestRepository.findById(
+                    new RequestId(createClientRequest.idempotencyKey(), currentClientId));
             if (existing.isPresent()) {
                 Request request = existing.get();
                 if (request.getRequestData().equals(writeJson(createClientRequest))) {
@@ -50,7 +56,7 @@ public class RequestService {
                 ? createClientRequest.idempotencyKey()
                 : UUID.randomUUID();
         Request request = Request.builder()
-                .id(requestId)
+                .requestId(new RequestId(requestId, currentClientId))
                 .type(RequestType.CLIENT_CREATE)
                 .status(RequestStatus.PENDING)
                 .createdAt(now)
@@ -61,9 +67,9 @@ public class RequestService {
         Request saved = requestRepository.save(request);
 
         try {
-            requestSchedulerService.scheduleClientCreateRequest(saved.getId());
+            requestSchedulerService.scheduleClientCreateRequest(saved.getId(), saved.getAuthClientId());
         } catch (SchedulerException ex) {
-            requestStateService.markFailed(saved.getId(), writeJson(AppResponse.error(
+            requestStateService.markFailed(saved.getId(), saved.getAuthClientId(), writeJson(AppResponse.error(
                     AppResponse.ErrorCode.INTERNAL_SERVER_ERROR.getCode(),
                     messageService.getMessage("error.request.schedulingFailed")
             )));
@@ -75,7 +81,9 @@ public class RequestService {
 
     @Transactional(readOnly = true)
     public RequestStatusResponse getRequestStatus(UUID requestId) {
-        Request request = requestRepository.findById(requestId)
+        String currentClientId = securityService.clientId();
+        Request request = requestRepository.findByIdAndAuthClientId(requestId, currentClientId)
+                .or(() -> requestRepository.findByIdAndAuthClientId(requestId, LEGACY_AUTH_CLIENT_ID))
                 .orElseThrow(() -> new RequestNotFoundException(requestId));
         return new RequestStatusResponse(
                 request.getId(),
@@ -112,4 +120,3 @@ public class RequestService {
         }
     }
 }
-

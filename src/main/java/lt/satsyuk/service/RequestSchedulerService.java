@@ -25,17 +25,20 @@ public class RequestSchedulerService {
         this.scheduler = scheduler;
     }
 
-    public void scheduleClientCreateRequest(UUID requestId) throws SchedulerException {
+    public void scheduleClientCreateRequest(UUID requestId, String authClientId) throws SchedulerException {
         JobDataMap jobDataMap = new JobDataMap();
         jobDataMap.put(RequestProcessingJob.REQUEST_ID_KEY, requestId.toString());
+        jobDataMap.put(RequestProcessingJob.AUTH_CLIENT_ID_KEY, authClientId);
+
+        String jobIdentity = requestId + "|" + authClientId;
 
         JobDetail jobDetail = JobBuilder.newJob(RequestProcessingJob.class)
-                .withIdentity(requestId.toString(), REQUEST_JOB_GROUP)
+                .withIdentity(jobIdentity, REQUEST_JOB_GROUP)
                 .usingJobData(jobDataMap)
                 .build();
 
         Trigger trigger = TriggerBuilder.newTrigger()
-                .withIdentity(requestId.toString(), REQUEST_TRIGGER_GROUP)
+                .withIdentity(jobIdentity, REQUEST_TRIGGER_GROUP)
                 .forJob(jobDetail)
                 .startNow()
                 .withSchedule(SimpleScheduleBuilder.simpleSchedule()
@@ -46,4 +49,3 @@ public class RequestSchedulerService {
         scheduler.scheduleJob(jobDetail, trigger);
     }
 }
-

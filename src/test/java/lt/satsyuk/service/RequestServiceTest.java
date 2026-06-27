@@ -7,7 +7,9 @@ import lt.satsyuk.dto.RequestAcceptedResponse;
 import lt.satsyuk.dto.RequestStatusResponse;
 import lt.satsyuk.api.util.TestTime;
 import lt.satsyuk.exception.IdempotencyKeyConflictException;
+import lt.satsyuk.exception.RequestNotFoundException;
 import lt.satsyuk.model.Request;
+import lt.satsyuk.model.RequestId;
 import lt.satsyuk.model.RequestStatus;
 import lt.satsyuk.model.RequestType;
 import lt.satsyuk.repository.RequestRepository;
@@ -35,6 +37,8 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class RequestServiceTest {
 
+    private static final String CLIENT_ID = "spring-app";
+
     private final ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
 
     @Mock
@@ -49,16 +53,21 @@ class RequestServiceTest {
     @Mock
     private MessageService messageService;
 
+    @Mock
+    private SecurityService securityService;
+
     private RequestService requestService;
 
     @BeforeEach
     void setUp() {
+        when(securityService.clientId()).thenReturn(CLIENT_ID);
         requestService = new RequestService(
                 requestRepository,
                 requestSchedulerService,
                 requestStateService,
                 objectMapper,
-                messageService
+                messageService,
+                securityService
         );
     }
 
@@ -77,8 +86,9 @@ class RequestServiceTest {
         assertThat(response.status()).isEqualTo(RequestStatus.PENDING);
         assertThat(savedRequest.getType()).isEqualTo(RequestType.CLIENT_CREATE);
         assertThat(savedRequest.getStatus()).isEqualTo(RequestStatus.PENDING);
+        assertThat(savedRequest.getAuthClientId()).isEqualTo(CLIENT_ID);
         assertThat(savedRequest.getRequestData()).isEqualTo(objectMapper.writeValueAsString(createClientRequest));
-        verify(requestSchedulerService).scheduleClientCreateRequest(savedRequest.getId());
+        verify(requestSchedulerService).scheduleClientCreateRequest(savedRequest.getId(), CLIENT_ID);
     }
 
     @Test
@@ -94,6 +104,7 @@ class RequestServiceTest {
         Request savedRequest = requestCaptor.getValue();
 
         assertThat(savedRequest.getId()).isEqualTo(idempotencyKey);
+        assertThat(savedRequest.getAuthClientId()).isEqualTo(CLIENT_ID);
         assertThat(response.requestId()).isEqualTo(idempotencyKey);
     }
 
@@ -103,38 +114,54 @@ class RequestServiceTest {
         CreateClientRequest createClientRequest = new CreateClientRequest(idempotencyKey, "John", "Doe", "+37061234567");
         OffsetDateTime now = OffsetDateTime.now();
         Request existingRequest = Request.builder()
-                .id(idempotencyKey)
+                .requestId(new RequestId(idempotencyKey, CLIENT_ID))
                 .type(RequestType.CLIENT_CREATE)
                 .status(RequestStatus.COMPLETED)
                 .createdAt(now)
                 .statusChangedAt(now)
                 .requestData(objectMapper.writeValueAsString(createClientRequest))
                 .build();
-        when(requestRepository.findById(idempotencyKey)).thenReturn(Optional.of(existingRequest));
+        when(requestRepository.findById(new RequestId(idempotencyKey, CLIENT_ID)))
+                .thenReturn(Optional.of(existingRequest));
 
         RequestAcceptedResponse response = requestService.submitClientCreateRequest(createClientRequest);
 
         assertThat(response.requestId()).isEqualTo(idempotencyKey);
         assertThat(response.status()).isEqualTo(RequestStatus.COMPLETED);
         verify(requestRepository, never()).save(any(Request.class));
-        verify(requestSchedulerService, never()).scheduleClientCreateRequest(any(UUID.class));
+        verify(requestSchedulerService, never()).scheduleClientCreateRequest(any(UUID.class), any(String.class));
     }
 
     @Test
-    void submitClientCreateRequestThrowsConflictForSameIdempotencyKeyDifferentPayload() throws Exception {
+    void submitClientCreateRequestAllowsSameIdempotencyKeyForDifferentClient() {
+        UUID idempotencyKey = UUID.randomUUID();
+        CreateClientRequest createClientRequest = new CreateClientRequest(idempotencyKey, "John", "Doe", "+37061234567");
+        when(requestRepository.findById(new RequestId(idempotencyKey, CLIENT_ID)))
+                .thenReturn(Optional.empty());
+        when(requestRepository.save(any(Request.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        RequestAcceptedResponse response = requestService.submitClientCreateRequest(createClientRequest);
+
+        assertThat(response.requestId()).isEqualTo(idempotencyKey);
+        verify(requestRepository).save(any(Request.class));
+    }
+
+    @Test
+    void submitClientCreateRequestThrowsConflictForSameIdempotencyKeySameClientDifferentPayload() throws Exception {
         UUID idempotencyKey = UUID.randomUUID();
         CreateClientRequest incoming = new CreateClientRequest(idempotencyKey, "John", "Doe", "+37061234567");
         CreateClientRequest existingPayload = new CreateClientRequest(idempotencyKey, "Jane", "Roe", "+37069999999");
         OffsetDateTime now = OffsetDateTime.now();
         Request existingRequest = Request.builder()
-                .id(idempotencyKey)
+                .requestId(new RequestId(idempotencyKey, CLIENT_ID))
                 .type(RequestType.CLIENT_CREATE)
                 .status(RequestStatus.COMPLETED)
                 .createdAt(now)
                 .statusChangedAt(now)
                 .requestData(objectMapper.writeValueAsString(existingPayload))
                 .build();
-        when(requestRepository.findById(idempotencyKey)).thenReturn(Optional.of(existingRequest));
+        when(requestRepository.findById(new RequestId(idempotencyKey, CLIENT_ID)))
+                .thenReturn(Optional.of(existingRequest));
 
         assertThatThrownBy(() -> requestService.submitClientCreateRequest(incoming))
                 .isInstanceOf(IdempotencyKeyConflictException.class)
@@ -146,7 +173,7 @@ class RequestServiceTest {
         UUID requestId = UUID.randomUUID();
         OffsetDateTime now = TestTime.FIXED_OFFSET_DATE_TIME;
         Request request = Request.builder()
-                .id(requestId)
+                .requestId(new RequestId(requestId, CLIENT_ID))
                 .type(RequestType.CLIENT_CREATE)
                 .status(RequestStatus.COMPLETED)
                 .createdAt(now)
@@ -154,7 +181,7 @@ class RequestServiceTest {
                 .requestData("{\"firstName\":\"John\"}")
                 .responseData("{\"code\":0,\"data\":{\"id\":1,\"phone\":\"+37061234567\"},\"message\":\"OK\"}")
                 .build();
-        when(requestRepository.findById(requestId)).thenReturn(Optional.of(request));
+        when(requestRepository.findByIdAndAuthClientId(requestId, CLIENT_ID)).thenReturn(Optional.of(request));
 
         RequestStatusResponse response = requestService.getRequestStatus(requestId);
 
@@ -176,13 +203,44 @@ class RequestServiceTest {
     }
 
     @Test
+    void getRequestStatusReturnsLegacyRequestWithUnknownClientId() {
+        UUID requestId = UUID.randomUUID();
+        OffsetDateTime now = TestTime.FIXED_OFFSET_DATE_TIME;
+        Request request = Request.builder()
+                .requestId(new RequestId(requestId, "unknown"))
+                .type(RequestType.CLIENT_CREATE)
+                .status(RequestStatus.COMPLETED)
+                .createdAt(now)
+                .statusChangedAt(now)
+                .requestData("{\"firstName\":\"John\"}")
+                .responseData("{\"code\":0,\"data\":{\"id\":1},\"message\":\"OK\"}")
+                .build();
+        when(requestRepository.findByIdAndAuthClientId(requestId, CLIENT_ID)).thenReturn(Optional.empty());
+        when(requestRepository.findByIdAndAuthClientId(requestId, "unknown")).thenReturn(Optional.of(request));
+
+        RequestStatusResponse response = requestService.getRequestStatus(requestId);
+
+        assertThat(response.requestId()).isEqualTo(requestId);
+    }
+
+    @Test
+    void getRequestStatusThrowsNotFoundWhenAuthClientIdMismatch() {
+        UUID requestId = UUID.randomUUID();
+        when(requestRepository.findByIdAndAuthClientId(requestId, CLIENT_ID)).thenReturn(Optional.empty());
+        when(requestRepository.findByIdAndAuthClientId(requestId, "unknown")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> requestService.getRequestStatus(requestId))
+                .isInstanceOf(RequestNotFoundException.class);
+    }
+
+    @Test
     void submitClientCreateRequestMarksProcessingErrorWhenSchedulingFails() throws Exception {
         CreateClientRequest createClientRequest = new CreateClientRequest(null, "John", "Doe", "+37061234567");
         when(requestRepository.save(any(Request.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(messageService.getMessage("error.request.schedulingFailed")).thenReturn("Failed to schedule request processing");
         doThrow(new SchedulerException("boom"))
                 .when(requestSchedulerService)
-                .scheduleClientCreateRequest(any(UUID.class));
+                .scheduleClientCreateRequest(any(UUID.class), any(String.class));
 
         assertThatThrownBy(() -> requestService.submitClientCreateRequest(createClientRequest))
                 .isInstanceOf(IllegalStateException.class)
@@ -193,6 +251,7 @@ class RequestServiceTest {
         Request savedRequest = requestCaptor.getValue();
         verify(requestStateService).markFailed(
                 savedRequest.getId(),
+                CLIENT_ID,
                 objectMapper.writeValueAsString(AppResponse.error(
                         AppResponse.ErrorCode.INTERNAL_SERVER_ERROR.getCode(),
                         "Failed to schedule request processing"
@@ -200,7 +259,3 @@ class RequestServiceTest {
         );
     }
 }
-
-
-
-
