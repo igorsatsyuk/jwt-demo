@@ -2,6 +2,7 @@ package lt.satsyuk.service;
 
 import lt.satsyuk.exception.RequestNotFoundException;
 import lt.satsyuk.model.Request;
+import lt.satsyuk.model.RequestId;
 import lt.satsyuk.repository.RequestRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -19,28 +20,28 @@ public class RequestStateService {
     private final RequestRepository requestRepository;
 
     @Transactional(readOnly = true)
-    public Request getRequired(UUID requestId) {
-        return requestRepository.findById(requestId)
+    public Request getRequired(UUID requestId, String authClientId) {
+        return requestRepository.findById(new RequestId(requestId, authClientId))
                 .orElseThrow(() -> new RequestNotFoundException(requestId));
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void markProcessing(UUID requestId) {
-        Request request = requestRepository.findById(requestId)
+    public void markProcessing(UUID requestId, String authClientId) {
+        Request request = requestRepository.findById(new RequestId(requestId, authClientId))
                 .orElseThrow(() -> new RequestNotFoundException(requestId));
         request.markProcessing(now());
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void markCompleted(UUID requestId, String responseData) {
-        Request request = requestRepository.findById(requestId)
+    public void markCompleted(UUID requestId, String authClientId, String responseData) {
+        Request request = requestRepository.findById(new RequestId(requestId, authClientId))
                 .orElseThrow(() -> new RequestNotFoundException(requestId));
         request.markCompleted(responseData, now());
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void markFailed(UUID requestId, String responseData) {
-        Request request = requestRepository.findById(requestId)
+    public void markFailed(UUID requestId, String authClientId, String responseData) {
+        Request request = requestRepository.findById(new RequestId(requestId, authClientId))
                 .orElseThrow(() -> new RequestNotFoundException(requestId));
         request.markFailed(responseData, now());
     }
@@ -49,5 +50,3 @@ public class RequestStateService {
         return OffsetDateTime.now(ZoneOffset.UTC);
     }
 }
-
-

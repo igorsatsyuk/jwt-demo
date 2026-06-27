@@ -23,9 +23,9 @@ public class RequestProcessingService {
     private final ObjectMapper objectMapper;
     private final MessageService messageService;
 
-    public void processClientCreateRequest(UUID requestId) {
-        Request request = requestStateService.getRequired(requestId);
-        requestStateService.markProcessing(requestId);
+    public void processClientCreateRequest(UUID requestId, String authClientId) {
+        Request request = requestStateService.getRequired(requestId, authClientId);
+        requestStateService.markProcessing(requestId, authClientId);
 
         try {
             if (request.getType() != RequestType.CLIENT_CREATE) {
@@ -34,16 +34,16 @@ public class RequestProcessingService {
 
             CreateClientRequest createClientRequest = objectMapper.readValue(request.getRequestData(), CreateClientRequest.class);
             ClientResponse clientResponse = clientService.create(createClientRequest);
-            requestStateService.markCompleted(requestId, writeJson(AppResponse.ok(clientResponse)));
+            requestStateService.markCompleted(requestId, authClientId, writeJson(AppResponse.ok(clientResponse)));
         } catch (PhoneAlreadyExistsException ex) {
             log.warn("Request {} failed due to duplicate phone", requestId, ex);
-            requestStateService.markFailed(requestId, writeJson(
+            requestStateService.markFailed(requestId, authClientId, writeJson(
                     AppResponse.error(AppResponse.ErrorCode.CONFLICT.getCode(),
                             messageService.getMessage(ex.getMessageCode(), new Object[]{ex.getPhone()}))
             ));
         } catch (Exception ex) {
             log.error("Request {} processing failed", requestId, ex);
-            requestStateService.markFailed(requestId, writeJson(
+            requestStateService.markFailed(requestId, authClientId, writeJson(
                     AppResponse.error(AppResponse.ErrorCode.INTERNAL_SERVER_ERROR.getCode(),
                             messageService.getMessage("api.error.internalServerError"))
             ));
@@ -58,4 +58,3 @@ public class RequestProcessingService {
         }
     }
 }
-
