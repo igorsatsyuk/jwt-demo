@@ -11,6 +11,6 @@ import java.util.UUID;
 
 public interface RequestRepository extends JpaRepository<Request, RequestId> {
 
-    @Query("SELECT r FROM Request r WHERE r.requestId.id = :id")
-    Optional<Request> findById(@Param("id") UUID id);
+    @Query("SELECT r FROM Request r WHERE r.requestId.id = :id AND r.requestId.authClientId = :authClientId")
+    Optional<Request> findByIdAndAuthClientId(@Param("id") UUID id, @Param("authClientId") String authClientId);
 }

@@ -86,7 +86,7 @@ class ClientIntegrationIT extends KeycloakIntegrationTest {
 
         // Verify persisted
         assertThat(repo.existsByPhone(req.phone())).isTrue();
-        assertThat(requestRepository.findById(accepted.requestId())).isPresent();
+        assertThat(requestRepository.findByIdAndAuthClientId(accepted.requestId(), "spring-app")).isPresent();
         Account createdAccount = accountRepository.findByClientId(data.id()).orElse(null);
         assertThat(createdAccount).isNotNull();
         assertThat(createdAccount.getBalance()).isEqualByComparingTo("0");

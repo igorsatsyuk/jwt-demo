@@ -181,7 +181,7 @@ class RequestServiceTest {
                 .requestData("{\"firstName\":\"John\"}")
                 .responseData("{\"code\":0,\"data\":{\"id\":1,\"phone\":\"+37061234567\"},\"message\":\"OK\"}")
                 .build();
-        when(requestRepository.findById(requestId)).thenReturn(Optional.of(request));
+        when(requestRepository.findByIdAndAuthClientId(requestId, CLIENT_ID)).thenReturn(Optional.of(request));
 
         RequestStatusResponse response = requestService.getRequestStatus(requestId);
 
@@ -215,7 +215,8 @@ class RequestServiceTest {
                 .requestData("{\"firstName\":\"John\"}")
                 .responseData("{\"code\":0,\"data\":{\"id\":1},\"message\":\"OK\"}")
                 .build();
-        when(requestRepository.findById(requestId)).thenReturn(Optional.of(request));
+        when(requestRepository.findByIdAndAuthClientId(requestId, CLIENT_ID)).thenReturn(Optional.empty());
+        when(requestRepository.findByIdAndAuthClientId(requestId, "unknown")).thenReturn(Optional.of(request));
 
         RequestStatusResponse response = requestService.getRequestStatus(requestId);
 
@@ -234,7 +235,8 @@ class RequestServiceTest {
                 .statusChangedAt(now)
                 .requestData("{\"firstName\":\"John\"}")
                 .build();
-        when(requestRepository.findById(requestId)).thenReturn(Optional.of(request));
+        when(requestRepository.findByIdAndAuthClientId(requestId, CLIENT_ID)).thenReturn(Optional.empty());
+        when(requestRepository.findByIdAndAuthClientId(requestId, "unknown")).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> requestService.getRequestStatus(requestId))
                 .isInstanceOf(RequestNotFoundException.class);

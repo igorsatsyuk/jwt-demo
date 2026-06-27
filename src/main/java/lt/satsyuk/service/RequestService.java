@@ -81,13 +81,10 @@ public class RequestService {
 
     @Transactional(readOnly = true)
     public RequestStatusResponse getRequestStatus(UUID requestId) {
-        Request request = requestRepository.findById(requestId)
-                .orElseThrow(() -> new RequestNotFoundException(requestId));
         String currentClientId = securityService.clientId();
-        if (!LEGACY_AUTH_CLIENT_ID.equals(request.getAuthClientId())
-                && !request.getAuthClientId().equals(currentClientId)) {
-            throw new RequestNotFoundException(requestId);
-        }
+        Request request = requestRepository.findByIdAndAuthClientId(requestId, currentClientId)
+                .or(() -> requestRepository.findByIdAndAuthClientId(requestId, LEGACY_AUTH_CLIENT_ID))
+                .orElseThrow(() -> new RequestNotFoundException(requestId));
         return new RequestStatusResponse(
                 request.getId(),
                 request.getType(),
