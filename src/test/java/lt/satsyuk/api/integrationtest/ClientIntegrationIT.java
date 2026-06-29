@@ -145,19 +145,22 @@ class ClientIntegrationIT extends KeycloakIntegrationTest {
     }
 
     @Test
-    void create_client_duplicate_phone_conflict() {
+    void create_client_existing_phone_adds_access_and_returns_existing() {
         Client existing = Client.builder().firstName("Jane").lastName("Roe").phone(PHONE).build();
         repo.save(existing);
+        clientAccessRepository.save(ClientAccess.builder().clientId(existing.getId()).authClientId("spring-app").build());
 
         String token = loginAndGetAccess(USERNAME, USER_PASSWORD);
         CreateClientRequest req = new CreateClientRequest(null, JOHN, DOE, PHONE);
 
         RequestAcceptedResponse accepted = postAndReturnData(clientUrl, token, req, HttpStatus.ACCEPTED, RequestAcceptedResponse.class);
-        RequestStatusResponse statusResponse = awaitRequestStatus(token, accepted.requestId(), RequestStatus.FAILED);
-        AppResponse<Object> finalResponse = readNestedResponse(statusResponse);
+        RequestStatusResponse statusResponse = awaitRequestStatus(token, accepted.requestId(), RequestStatus.COMPLETED);
+        AppResponse<ClientResponse> finalResponse = readNestedResponse(statusResponse);
+        ClientResponse data = objectMapper.convertValue(finalResponse.data(), ClientResponse.class);
 
-        assertThat(finalResponse.code()).isEqualTo(AppResponse.ErrorCode.CONFLICT.getCode());
-        assertThat(finalResponse.message()).isEqualTo("Client with phone=" + req.phone() + " already exists");
+        assertThat(data.id()).isEqualTo(existing.getId());
+        assertThat(data.phone()).isEqualTo(PHONE);
+        assertThat(finalResponse.code()).isZero();
     }
 
     @Test
@@ -410,3 +413,4 @@ class ClientIntegrationIT extends KeycloakIntegrationTest {
         return objectMapper.convertValue(statusResponse.response(), new TypeReference<>() {});
     }
 }
+

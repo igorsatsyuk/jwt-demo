@@ -3,7 +3,6 @@ package lt.satsyuk.service;
 import lt.satsyuk.dto.ClientResponse;
 import lt.satsyuk.dto.CreateClientRequest;
 import lt.satsyuk.exception.ClientSearchQueryTooShortException;
-import lt.satsyuk.exception.PhoneAlreadyExistsException;
 import lt.satsyuk.mapper.ClientMapper;
 import lt.satsyuk.model.Account;
 import lt.satsyuk.model.Client;
@@ -22,6 +21,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -56,13 +56,36 @@ class ClientServiceTest {
     }
 
     @Test
-    void createThrowsWhenPhoneAlreadyExists() {
+    void createReturnsExistingClientAndAddsAccessWhenPhoneExists() {
         CreateClientRequest request = new CreateClientRequest(null, "John", "Doe", "+37060000001");
-        when(clientRepository.existsByPhone(request.phone())).thenReturn(true);
+        Client existing = Client.builder().id(7L).firstName("John").lastName("Doe").phone("+37060000001").build();
+        ClientResponse response = new ClientResponse(7L, "John", "Doe", "+37060000001");
 
-        assertThatThrownBy(() -> clientService.create(request, AUTH_CLIENT_ID))
-                .isInstanceOf(PhoneAlreadyExistsException.class)
-                .hasMessageContaining(request.phone());
+        when(clientRepository.findByPhone(request.phone())).thenReturn(Optional.of(existing));
+        when(clientAccessRepository.existsByClientIdAndAuthClientId(7L, AUTH_CLIENT_ID)).thenReturn(false);
+        when(clientMapper.toResponse(existing)).thenReturn(response);
+
+        ClientResponse actual = clientService.create(request, AUTH_CLIENT_ID);
+
+        assertThat(actual).isEqualTo(response);
+        verify(clientAccessRepository).save(any(ClientAccess.class));
+        verify(accountRepository, never()).saveAndFlush(any(Account.class));
+    }
+
+    @Test
+    void createDoesNotDuplicateAccessWhenPhoneExistsAndAccessAlreadyPresent() {
+        CreateClientRequest request = new CreateClientRequest(null, "John", "Doe", "+37060000001");
+        Client existing = Client.builder().id(7L).firstName("John").lastName("Doe").phone("+37060000001").build();
+        ClientResponse response = new ClientResponse(7L, "John", "Doe", "+37060000001");
+
+        when(clientRepository.findByPhone(request.phone())).thenReturn(Optional.of(existing));
+        when(clientAccessRepository.existsByClientIdAndAuthClientId(7L, AUTH_CLIENT_ID)).thenReturn(true);
+        when(clientMapper.toResponse(existing)).thenReturn(response);
+
+        ClientResponse actual = clientService.create(request, AUTH_CLIENT_ID);
+
+        assertThat(actual).isEqualTo(response);
+        verify(clientAccessRepository, never()).save(any(ClientAccess.class));
     }
 
     @Test
@@ -72,7 +95,7 @@ class ClientServiceTest {
         Client saved = Client.builder().id(7L).firstName("John").lastName("Doe").phone("+37060000001").build();
         ClientResponse response = new ClientResponse(7L, "John", "Doe", "+37060000001");
 
-        when(clientRepository.existsByPhone(request.phone())).thenReturn(false);
+        when(clientRepository.findByPhone(request.phone())).thenReturn(Optional.empty());
         when(clientMapper.toEntity(request)).thenReturn(entity);
         when(clientRepository.saveAndFlush(entity)).thenReturn(saved);
         when(clientMapper.toResponse(saved)).thenReturn(response);
@@ -80,11 +103,7 @@ class ClientServiceTest {
         ClientResponse actual = clientService.create(request, AUTH_CLIENT_ID);
 
         assertThat(actual).isEqualTo(response);
-        ArgumentCaptor<ClientAccess> accessCaptor = ArgumentCaptor.forClass(ClientAccess.class);
-        verify(clientAccessRepository).save(accessCaptor.capture());
-        ClientAccess savedAccess = accessCaptor.getValue();
-        assertThat(savedAccess.getClientId()).isEqualTo(7L);
-        assertThat(savedAccess.getAuthClientId()).isEqualTo(AUTH_CLIENT_ID);
+        verify(clientAccessRepository).save(any(ClientAccess.class));
 
         ArgumentCaptor<Account> accountCaptor = ArgumentCaptor.forClass(Account.class);
         verify(accountRepository).saveAndFlush(accountCaptor.capture());
@@ -94,35 +113,24 @@ class ClientServiceTest {
     }
 
     @Test
-    void createMapsClientSaveConstraintViolationToPhoneAlreadyExistsException() {
+    void createMapsClientSaveConstraintViolationToExistingClient() {
         CreateClientRequest request = new CreateClientRequest(null, "John", "Doe", "+37060000001");
         Client entity = Client.builder().firstName("John").lastName("Doe").phone("+37060000001").build();
+        Client existing = Client.builder().id(7L).firstName("John").lastName("Doe").phone("+37060000001").build();
+        ClientResponse response = new ClientResponse(7L, "John", "Doe", "+37060000001");
 
-        when(clientRepository.existsByPhone(request.phone())).thenReturn(false);
+        when(clientRepository.findByPhone(request.phone()))
+                .thenReturn(Optional.empty())
+                .thenReturn(Optional.of(existing));
         when(clientMapper.toEntity(request)).thenReturn(entity);
         when(clientRepository.saveAndFlush(entity)).thenThrow(new DataIntegrityViolationException("duplicate phone"));
+        when(clientAccessRepository.existsByClientIdAndAuthClientId(7L, AUTH_CLIENT_ID)).thenReturn(false);
+        when(clientMapper.toResponse(existing)).thenReturn(response);
 
-        assertThatThrownBy(() -> clientService.create(request, AUTH_CLIENT_ID))
-                .isInstanceOf(PhoneAlreadyExistsException.class)
-                .hasMessageContaining(request.phone());
+        ClientResponse actual = clientService.create(request, AUTH_CLIENT_ID);
 
-        verify(accountRepository, never()).saveAndFlush(any(Account.class));
-    }
-
-    @Test
-    void createDoesNotMapAccountSaveFailureToPhoneAlreadyExistsException() {
-        CreateClientRequest request = new CreateClientRequest(null, "John", "Doe", "+37060000001");
-        Client entity = Client.builder().firstName("John").lastName("Doe").phone("+37060000001").build();
-        Client saved = Client.builder().id(7L).firstName("John").lastName("Doe").phone("+37060000001").build();
-
-        when(clientRepository.existsByPhone(request.phone())).thenReturn(false);
-        when(clientMapper.toEntity(request)).thenReturn(entity);
-        when(clientRepository.saveAndFlush(entity)).thenReturn(saved);
-        when(accountRepository.saveAndFlush(any(Account.class))).thenThrow(new DataIntegrityViolationException("account failure"));
-
-        assertThatThrownBy(() -> clientService.create(request, AUTH_CLIENT_ID))
-                .isInstanceOf(DataIntegrityViolationException.class)
-                .hasMessageContaining("account failure");
+        assertThat(actual).isEqualTo(response);
+        verify(clientAccessRepository).save(any(ClientAccess.class));
     }
 
     @Test
