@@ -128,11 +128,24 @@ class AccountIntegrationIT extends KeycloakIntegrationTest {
 
     @Test
     void get_account_not_accessible_by_other_auth_client() {
-        Account account = saveAccount("10.00", "+37069999999");
+        Client client = clientRepository.save(
+                Client.builder()
+                        .firstName("Other")
+                        .lastName("Client")
+                        .phone("+37069999999")
+                        .build()
+        );
         clientAccessRepository.save(ClientAccess.builder()
-                .clientId(account.getClient().getId())
+                .clientId(client.getId())
                 .authClientId("other-client")
                 .build());
+
+        Account account = accountRepository.saveAndFlush(
+                Account.builder()
+                        .balance(new java.math.BigDecimal("10.00"))
+                        .client(client)
+                        .build()
+        );
 
         String token = loginAndGetAccess(USERNAME, USER_PASSWORD);
 
@@ -171,3 +184,4 @@ class AccountIntegrationIT extends KeycloakIntegrationTest {
         );
     }
 }
+
