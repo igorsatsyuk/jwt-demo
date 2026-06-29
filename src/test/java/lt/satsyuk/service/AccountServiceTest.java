@@ -39,6 +39,8 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class AccountServiceTest {
 
+    private static final String AUTH_CLIENT_ID = "spring-app";
+
     @Mock
     private AccountRepository accountRepository;
 
@@ -69,11 +71,11 @@ class AccountServiceTest {
         UpdateBalanceRequest request = new UpdateBalanceRequest(11L, new BigDecimal("25.50"));
         AccountResponse response = new AccountResponse(22L, 11L, new BigDecimal("125.50"));
 
-        when(accountRepository.findByClientIdForPessimisticUpdate(11L)).thenReturn(Optional.of(account));
+        when(accountRepository.findByClientIdAndAuthClientIdForPessimisticUpdate(11L, AUTH_CLIENT_ID)).thenReturn(Optional.of(account));
         when(accountRepository.saveAndFlush(account)).thenReturn(account);
         when(accountMapper.toResponse(account)).thenReturn(response);
 
-        AccountResponse actual = accountService.updateBalancePessimistic(request);
+        AccountResponse actual = accountService.updateBalancePessimistic(request, AUTH_CLIENT_ID);
 
         assertThat(actual).isEqualTo(response);
         assertThat(account.getBalance()).isEqualByComparingTo("125.50");
@@ -81,9 +83,9 @@ class AccountServiceTest {
 
     @Test
     void updateBalancePessimisticThrowsWhenAccountNotFound() {
-        when(accountRepository.findByClientIdForPessimisticUpdate(11L)).thenReturn(Optional.empty());
+        when(accountRepository.findByClientIdAndAuthClientIdForPessimisticUpdate(11L, AUTH_CLIENT_ID)).thenReturn(Optional.empty());
         UpdateBalanceRequest request = new UpdateBalanceRequest(11L, BigDecimal.ONE);
-        ThrowingCallable action = () -> accountService.updateBalancePessimistic(request);
+        ThrowingCallable action = () -> accountService.updateBalancePessimistic(request, AUTH_CLIENT_ID);
 
         assertThatThrownBy(action)
                 .isInstanceOf(AccountNotFoundException.class)
@@ -101,10 +103,10 @@ class AccountServiceTest {
                 .build();
         AccountResponse response = new AccountResponse(22L, 11L, new BigDecimal("10.00"));
 
-        when(accountRepository.findByClientId(11L)).thenReturn(Optional.of(account));
+        when(accountRepository.findByClientIdAndAuthClientId(11L, AUTH_CLIENT_ID)).thenReturn(Optional.of(account));
         when(accountMapper.toResponse(account)).thenReturn(response);
 
-        assertThat(accountService.getByClientId(11L)).isEqualTo(response);
+        assertThat(accountService.getByClientId(11L, AUTH_CLIENT_ID)).isEqualTo(response);
     }
 
     @Test
@@ -116,12 +118,12 @@ class AccountServiceTest {
         doThrow(new ObjectOptimisticLockingFailureException(Account.class, 11L))
                 .doThrow(new OptimisticLockException())
                 .doReturn(expected)
-                .when(spyService).updateBalanceOptimisticTx(11L, amount);
+                .when(spyService).updateBalanceOptimisticTx(11L, amount, AUTH_CLIENT_ID);
 
-        AccountResponse actual = spyService.safeUpdate(11L, amount);
+        AccountResponse actual = spyService.safeUpdate(11L, amount, AUTH_CLIENT_ID);
 
         assertThat(actual).isEqualTo(expected);
-        verify(spyService, times(3)).updateBalanceOptimisticTx(11L, amount);
+        verify(spyService, times(3)).updateBalanceOptimisticTx(11L, amount, AUTH_CLIENT_ID);
     }
 
     @Test
@@ -130,12 +132,12 @@ class AccountServiceTest {
         BigDecimal amount = new BigDecimal("5.00");
 
         doThrow(new ObjectOptimisticLockingFailureException(Account.class, 11L))
-                .when(spyService).updateBalanceOptimisticTx(11L, amount);
+                .when(spyService).updateBalanceOptimisticTx(11L, amount, AUTH_CLIENT_ID);
 
-        assertThatThrownBy(() -> spyService.safeUpdate(11L, amount))
+        assertThatThrownBy(() -> spyService.safeUpdate(11L, amount, AUTH_CLIENT_ID))
                 .isInstanceOf(AccountOptimisticLockException.class)
                 .hasMessageContaining("client id=11");
-        verify(spyService, times(3)).updateBalanceOptimisticTx(11L, amount);
+        verify(spyService, times(3)).updateBalanceOptimisticTx(11L, amount, AUTH_CLIENT_ID);
     }
 
     @Test
@@ -144,9 +146,9 @@ class AccountServiceTest {
         BigDecimal amount = new BigDecimal("5.00");
 
         doThrow(new IllegalStateException("boom"))
-                .when(spyService).updateBalanceOptimisticTx(11L, amount);
+                .when(spyService).updateBalanceOptimisticTx(11L, amount, AUTH_CLIENT_ID);
 
-        assertThatThrownBy(() -> spyService.safeUpdate(11L, amount))
+        assertThatThrownBy(() -> spyService.safeUpdate(11L, amount, AUTH_CLIENT_ID))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessage("boom");
     }
@@ -157,16 +159,16 @@ class AccountServiceTest {
         UpdateBalanceRequest request = new UpdateBalanceRequest(11L, new BigDecimal("3.00"));
         AccountResponse expected = new AccountResponse(22L, 11L, new BigDecimal("13.00"));
 
-        doReturn(expected).when(spyService).safeUpdate(11L, new BigDecimal("3.00"));
+        doReturn(expected).when(spyService).safeUpdate(11L, new BigDecimal("3.00"), AUTH_CLIENT_ID);
 
-        assertThat(spyService.updateBalanceOptimistic(request)).isEqualTo(expected);
+        assertThat(spyService.updateBalanceOptimistic(request, AUTH_CLIENT_ID)).isEqualTo(expected);
     }
 
     @Test
     void updateBalanceOptimisticTxThrowsWhenAccountMissing() {
-        when(accountRepository.findByClientId(11L)).thenReturn(Optional.empty());
+        when(accountRepository.findByClientIdAndAuthClientId(11L, AUTH_CLIENT_ID)).thenReturn(Optional.empty());
         BigDecimal amount = new BigDecimal("1.00");
-        ThrowingCallable action = () -> accountService.updateBalanceOptimisticTx(11L, amount);
+        ThrowingCallable action = () -> accountService.updateBalanceOptimisticTx(11L, amount, AUTH_CLIENT_ID);
 
         assertThatThrownBy(action)
                 .isInstanceOf(AccountNotFoundException.class);

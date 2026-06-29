@@ -45,6 +45,15 @@ public class GlobalExceptionHandler {
                         messageService.getMessage("api.error.forbidden")));
     }
 
+    @ExceptionHandler(ResourceAccessDeniedException.class)
+    public ResponseEntity<AppResponse<Void>> handleResourceAccessDenied(ResourceAccessDeniedException ex) {
+        String message = messageService.getMessage(ex.getMessageCode());
+        return ResponseEntity
+                .status(HttpStatus.FORBIDDEN)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(AppResponse.<Void>error(AppResponse.ErrorCode.FORBIDDEN.getCode(), message));
+    }
+
     @ExceptionHandler(AccountNotFoundException.class)
     public ResponseEntity<AppResponse<Void>> handleAccountNotFound(AccountNotFoundException ex) {
         String message = messageService.getMessage(ex.getMessageCode(), new Object[]{String.valueOf(ex.getClientId())});

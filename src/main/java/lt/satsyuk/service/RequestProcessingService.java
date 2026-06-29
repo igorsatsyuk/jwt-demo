@@ -33,7 +33,7 @@ public class RequestProcessingService {
             }
 
             CreateClientRequest createClientRequest = objectMapper.readValue(request.getRequestData(), CreateClientRequest.class);
-            ClientResponse clientResponse = clientService.create(createClientRequest);
+            ClientResponse clientResponse = clientService.create(createClientRequest, authClientId);
             requestStateService.markCompleted(requestId, authClientId, writeJson(AppResponse.ok(clientResponse)));
         } catch (PhoneAlreadyExistsException ex) {
             log.warn("Request {} failed due to duplicate phone", requestId, ex);

@@ -11,6 +11,7 @@ import lt.satsyuk.dto.AccountResponse;
 import lt.satsyuk.dto.AppResponse;
 import lt.satsyuk.dto.UpdateBalanceRequest;
 import lt.satsyuk.service.AccountService;
+import lt.satsyuk.service.SecurityService;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -26,9 +27,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class AccountController {
 
     private final AccountService accountService;
+    private final SecurityService securityService;
 
-    public AccountController(AccountService accountService) {
+    public AccountController(AccountService accountService, SecurityService securityService) {
         this.accountService = accountService;
+        this.securityService = securityService;
     }
 
     @PostMapping("/balance/pessimistic")
@@ -46,7 +49,7 @@ public class AccountController {
     @ApiResponse(responseCode = "404", description = "Account not found",
             content = @Content(mediaType = "application/json"))
     public AppResponse<AccountResponse> updateBalancePessimistic(@Valid @RequestBody UpdateBalanceRequest request) {
-        return AppResponse.ok(accountService.updateBalancePessimistic(request));
+        return AppResponse.ok(accountService.updateBalancePessimistic(request, securityService.clientId()));
     }
 
     @PostMapping("/balance/optimistic")
@@ -66,7 +69,7 @@ public class AccountController {
     @ApiResponse(responseCode = "409", description = "Optimistic lock conflict",
             content = @Content(mediaType = "application/json"))
     public AppResponse<AccountResponse> updateBalanceOptimistic(@Valid @RequestBody UpdateBalanceRequest request) {
-        return AppResponse.ok(accountService.updateBalanceOptimistic(request));
+        return AppResponse.ok(accountService.updateBalanceOptimistic(request, securityService.clientId()));
     }
 
     @GetMapping("/client/{clientId}")
@@ -82,6 +85,6 @@ public class AccountController {
     @ApiResponse(responseCode = "404", description = "Account not found",
             content = @Content(mediaType = "application/json"))
     public AppResponse<AccountResponse> getByClientId(@PathVariable("clientId") Long clientId) {
-        return AppResponse.ok(accountService.getByClientId(clientId));
+        return AppResponse.ok(accountService.getByClientId(clientId, securityService.clientId()));
     }
 }

@@ -12,10 +12,8 @@ public interface ClientMapper {
 
     ClientMapper INSTANCE = Mappers.getMapper(ClientMapper.class);
 
-    // 1) CreateClientRequest → Client
     @Mapping(target = "id", ignore = true)
     Client toEntity(CreateClientRequest request);
 
-    // 2) Client → ClientResponse
     ClientResponse toResponse(Client client);
 }

@@ -13,6 +13,7 @@ import lt.satsyuk.dto.CreateClientRequest;
 import lt.satsyuk.dto.RequestAcceptedResponse;
 import lt.satsyuk.service.ClientService;
 import lt.satsyuk.service.RequestService;
+import lt.satsyuk.service.SecurityService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -27,10 +28,12 @@ public class ClientController {
 
     private final ClientService clientService;
     private final RequestService requestService;
+    private final SecurityService securityService;
 
-    public ClientController(ClientService clientService, RequestService requestService) {
+    public ClientController(ClientService clientService, RequestService requestService, SecurityService securityService) {
         this.clientService = clientService;
         this.requestService = requestService;
+        this.securityService = securityService;
     }
 
     @PostMapping
@@ -64,7 +67,7 @@ public class ClientController {
     @ApiResponse(responseCode = "404", description = "Not found",
             content = @Content(mediaType = "application/json"))
     public AppResponse<ClientResponse> get(@PathVariable("id") Long id) {
-        return AppResponse.ok(clientService.get(id));
+        return AppResponse.ok(clientService.get(id, securityService.clientId()));
     }
 
     @GetMapping("/search")
@@ -80,6 +83,6 @@ public class ClientController {
     @ApiResponse(responseCode = "403", description = "Forbidden",
             content = @Content(mediaType = "application/json"))
     public AppResponse<List<ClientResponse>> search(@RequestParam("q") String query) {
-        return AppResponse.ok(clientService.searchByNameOrSurname(query));
+        return AppResponse.ok(clientService.searchByNameOrSurname(query, securityService.clientId()));
     }
 }

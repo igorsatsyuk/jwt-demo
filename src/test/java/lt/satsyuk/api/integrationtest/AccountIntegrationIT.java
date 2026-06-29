@@ -7,7 +7,9 @@ import lt.satsyuk.dto.AppResponse;
 import lt.satsyuk.dto.UpdateBalanceRequest;
 import lt.satsyuk.model.Account;
 import lt.satsyuk.model.Client;
+import lt.satsyuk.model.ClientAccess;
 import lt.satsyuk.repository.AccountRepository;
+import lt.satsyuk.repository.ClientAccessRepository;
 import lt.satsyuk.repository.ClientRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -31,20 +33,24 @@ class AccountIntegrationIT extends KeycloakIntegrationTest {
 
     private final AccountRepository accountRepository;
     private final ClientRepository clientRepository;
+    private final ClientAccessRepository clientAccessRepository;
 
     AccountIntegrationIT(@Qualifier("keycloakProperties") KeycloakProperties props,
                          CacheManager cacheManager,
                          RateLimitingFilter rateLimitingFilter,
                          AccountRepository accountRepository,
-                         ClientRepository clientRepository) {
+                         ClientRepository clientRepository,
+                         ClientAccessRepository clientAccessRepository) {
         super(props, cacheManager, rateLimitingFilter);
         this.accountRepository = accountRepository;
         this.clientRepository = clientRepository;
+        this.clientAccessRepository = clientAccessRepository;
     }
 
     @BeforeEach
     void setUp() {
         accountRepository.deleteAll();
+        clientAccessRepository.deleteAll();
         clientRepository.deleteAll();
     }
 
@@ -120,6 +126,29 @@ class AccountIntegrationIT extends KeycloakIntegrationTest {
         );
     }
 
+    @Test
+    void get_account_not_accessible_by_other_auth_client() {
+        Account account = saveAccount("10.00", "+37069999999");
+        clientAccessRepository.save(ClientAccess.builder()
+                .clientId(account.getClient().getId())
+                .authClientId("other-client")
+                .build());
+
+        String token = loginAndGetAccess(USERNAME, USER_PASSWORD);
+
+        ResponseEntity<AppResponse<Object>> response = requestGet(
+                accountUrl + "/client/" + account.getClient().getId(),
+                token
+        );
+
+        assertErrorStatusAndBody(
+                response,
+                HttpStatus.NOT_FOUND,
+                AppResponse.ErrorCode.NOT_FOUND.getCode(),
+                "Account for client id=" + account.getClient().getId() + " not found"
+        );
+    }
+
     private Account saveAccount(String balance, String phone) {
         Client client = clientRepository.save(
                 Client.builder()
@@ -128,6 +157,11 @@ class AccountIntegrationIT extends KeycloakIntegrationTest {
                         .phone(phone)
                         .build()
         );
+
+        clientAccessRepository.save(ClientAccess.builder()
+                .clientId(client.getId())
+                .authClientId("spring-app")
+                .build());
 
         return accountRepository.saveAndFlush(
                 Account.builder()

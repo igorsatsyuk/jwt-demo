@@ -7,7 +7,9 @@ import lt.satsyuk.exception.PhoneAlreadyExistsException;
 import lt.satsyuk.mapper.ClientMapper;
 import lt.satsyuk.model.Account;
 import lt.satsyuk.model.Client;
+import lt.satsyuk.model.ClientAccess;
 import lt.satsyuk.repository.AccountRepository;
+import lt.satsyuk.repository.ClientAccessRepository;
 import lt.satsyuk.repository.ClientRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -32,6 +34,7 @@ import static org.mockito.Mockito.when;
 class ClientServiceTest {
 
     private static final int SEARCH_MAX_RESULTS = 2;
+    private static final String AUTH_CLIENT_ID = "spring-app";
 
     @Mock
     private ClientRepository clientRepository;
@@ -40,13 +43,16 @@ class ClientServiceTest {
     private AccountRepository accountRepository;
 
     @Mock
+    private ClientAccessRepository clientAccessRepository;
+
+    @Mock
     private ClientMapper clientMapper;
 
     private ClientService clientService;
 
     @BeforeEach
     void setUp() {
-        clientService = new ClientService(clientRepository, accountRepository, clientMapper, SEARCH_MAX_RESULTS);
+        clientService = new ClientService(clientRepository, accountRepository, clientAccessRepository, clientMapper, SEARCH_MAX_RESULTS);
     }
 
     @Test
@@ -54,7 +60,7 @@ class ClientServiceTest {
         CreateClientRequest request = new CreateClientRequest(null, "John", "Doe", "+37060000001");
         when(clientRepository.existsByPhone(request.phone())).thenReturn(true);
 
-        assertThatThrownBy(() -> clientService.create(request))
+        assertThatThrownBy(() -> clientService.create(request, AUTH_CLIENT_ID))
                 .isInstanceOf(PhoneAlreadyExistsException.class)
                 .hasMessageContaining(request.phone());
     }
@@ -71,9 +77,15 @@ class ClientServiceTest {
         when(clientRepository.saveAndFlush(entity)).thenReturn(saved);
         when(clientMapper.toResponse(saved)).thenReturn(response);
 
-        ClientResponse actual = clientService.create(request);
+        ClientResponse actual = clientService.create(request, AUTH_CLIENT_ID);
 
         assertThat(actual).isEqualTo(response);
+        ArgumentCaptor<ClientAccess> accessCaptor = ArgumentCaptor.forClass(ClientAccess.class);
+        verify(clientAccessRepository).save(accessCaptor.capture());
+        ClientAccess savedAccess = accessCaptor.getValue();
+        assertThat(savedAccess.getClientId()).isEqualTo(7L);
+        assertThat(savedAccess.getAuthClientId()).isEqualTo(AUTH_CLIENT_ID);
+
         ArgumentCaptor<Account> accountCaptor = ArgumentCaptor.forClass(Account.class);
         verify(accountRepository).saveAndFlush(accountCaptor.capture());
         Account createdAccount = accountCaptor.getValue();
@@ -90,7 +102,7 @@ class ClientServiceTest {
         when(clientMapper.toEntity(request)).thenReturn(entity);
         when(clientRepository.saveAndFlush(entity)).thenThrow(new DataIntegrityViolationException("duplicate phone"));
 
-        assertThatThrownBy(() -> clientService.create(request))
+        assertThatThrownBy(() -> clientService.create(request, AUTH_CLIENT_ID))
                 .isInstanceOf(PhoneAlreadyExistsException.class)
                 .hasMessageContaining(request.phone());
 
@@ -108,14 +120,14 @@ class ClientServiceTest {
         when(clientRepository.saveAndFlush(entity)).thenReturn(saved);
         when(accountRepository.saveAndFlush(any(Account.class))).thenThrow(new DataIntegrityViolationException("account failure"));
 
-        assertThatThrownBy(() -> clientService.create(request))
+        assertThatThrownBy(() -> clientService.create(request, AUTH_CLIENT_ID))
                 .isInstanceOf(DataIntegrityViolationException.class)
                 .hasMessageContaining("account failure");
     }
 
     @Test
     void searchByNameOrSurnameThrowsWhenQueryTooShort() {
-        assertThatThrownBy(() -> clientService.searchByNameOrSurname("ab"))
+        assertThatThrownBy(() -> clientService.searchByNameOrSurname("ab", AUTH_CLIENT_ID))
                 .isInstanceOfSatisfying(ClientSearchQueryTooShortException.class,
                         ex -> assertThat(ex.getMinLength()).isEqualTo(ClientService.MIN_SEARCH_QUERY_LENGTH));
     }
@@ -127,16 +139,16 @@ class ClientServiceTest {
         ClientResponse firstResponse = new ClientResponse(1L, "Alice", "Smith", "+37060000001");
         ClientResponse secondResponse = new ClientResponse(2L, "Alina", "Johnson", "+37060000002");
 
-        when(clientRepository.findByFirstNameContainingIgnoreCaseOrLastNameContainingIgnoreCaseOrderByIdAsc(
+        when(clientRepository.searchByNameOrSurnameAndAuthClientId(
                 "Ali",
-                "Ali",
+                AUTH_CLIENT_ID,
                 PageRequest.of(0, SEARCH_MAX_RESULTS)
         ))
                 .thenReturn(List.of(first, second));
         when(clientMapper.toResponse(first)).thenReturn(firstResponse);
         when(clientMapper.toResponse(second)).thenReturn(secondResponse);
 
-        List<ClientResponse> actual = clientService.searchByNameOrSurname("  Ali  ");
+        List<ClientResponse> actual = clientService.searchByNameOrSurname("  Ali  ", AUTH_CLIENT_ID);
 
         assertThat(actual).containsExactly(firstResponse, secondResponse);
     }
