@@ -5,7 +5,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lt.satsyuk.dto.AppResponse;
 import lt.satsyuk.dto.ClientResponse;
 import lt.satsyuk.dto.CreateClientRequest;
-import lt.satsyuk.exception.PhoneAlreadyExistsException;
 import lt.satsyuk.model.Request;
 import lt.satsyuk.model.RequestType;
 import lombok.RequiredArgsConstructor;
@@ -33,14 +32,8 @@ public class RequestProcessingService {
             }
 
             CreateClientRequest createClientRequest = objectMapper.readValue(request.getRequestData(), CreateClientRequest.class);
-            ClientResponse clientResponse = clientService.create(createClientRequest);
+            ClientResponse clientResponse = clientService.create(createClientRequest, authClientId);
             requestStateService.markCompleted(requestId, authClientId, writeJson(AppResponse.ok(clientResponse)));
-        } catch (PhoneAlreadyExistsException ex) {
-            log.warn("Request {} failed due to duplicate phone", requestId, ex);
-            requestStateService.markFailed(requestId, authClientId, writeJson(
-                    AppResponse.error(AppResponse.ErrorCode.CONFLICT.getCode(),
-                            messageService.getMessage(ex.getMessageCode(), new Object[]{ex.getPhone()}))
-            ));
         } catch (Exception ex) {
             log.error("Request {} processing failed", requestId, ex);
             requestStateService.markFailed(requestId, authClientId, writeJson(

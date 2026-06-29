@@ -34,8 +34,8 @@ public class AccountService {
     }
 
     @Transactional
-    public AccountResponse updateBalancePessimistic(UpdateBalanceRequest request) {
-        Account account = accountRepository.findByClientIdForPessimisticUpdate(request.clientId())
+    public AccountResponse updateBalancePessimistic(UpdateBalanceRequest request, String authClientId) {
+        Account account = accountRepository.findByClientIdAndAuthClientIdForPessimisticUpdate(request.clientId(), authClientId)
                 .orElseThrow(() -> new AccountNotFoundException(request.clientId()));
 
         account.updateBalance(account.getBalance().add(request.amount()));
@@ -44,21 +44,21 @@ public class AccountService {
         return accountMapper.toResponse(saved);
     }
 
-    public AccountResponse updateBalanceOptimistic(UpdateBalanceRequest request) {
-        return safeUpdate(request.clientId(), request.amount());
+    public AccountResponse updateBalanceOptimistic(UpdateBalanceRequest request, String authClientId) {
+        return safeUpdate(request.clientId(), request.amount(), authClientId);
     }
 
-    public AccountResponse getByClientId(Long clientId) {
-        Account account = accountRepository.findByClientId(clientId)
+    public AccountResponse getByClientId(Long clientId, String authClientId) {
+        Account account = accountRepository.findByClientIdAndAuthClientId(clientId, authClientId)
                 .orElseThrow(() -> new AccountNotFoundException(clientId));
         return accountMapper.toResponse(account);
     }
 
-    public AccountResponse safeUpdate(Long clientId, BigDecimal amount) {
+    public AccountResponse safeUpdate(Long clientId, BigDecimal amount, String authClientId) {
         for (int i = 0; i < MAX_OPTIMISTIC_RETRIES; i++) {
             try {
                 return Objects.requireNonNull(
-                        transactionTemplate.execute(status -> updateBalanceOptimisticTx(clientId, amount)),
+                        transactionTemplate.execute(status -> updateBalanceOptimisticTx(clientId, amount, authClientId)),
                         "Transaction returned null result"
                 );
             } catch (RuntimeException ex) {
@@ -75,8 +75,8 @@ public class AccountService {
         throw new AccountOptimisticLockException(clientId);
     }
 
-    protected AccountResponse updateBalanceOptimisticTx(Long clientId, BigDecimal amount) {
-        Account account = accountRepository.findByClientId(clientId)
+    protected AccountResponse updateBalanceOptimisticTx(Long clientId, BigDecimal amount, String authClientId) {
+        Account account = accountRepository.findByClientIdAndAuthClientId(clientId, authClientId)
                 .orElseThrow(() -> new AccountNotFoundException(clientId));
 
         account.updateBalance(account.getBalance().add(amount));
