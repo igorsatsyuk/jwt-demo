@@ -388,4 +388,36 @@ class AccountServiceTest {
     void parseErrorResponseReturnsNullForMalformedJson() {
         assertThat(accountService.parseErrorResponse("{bad json")).isNull();
     }
+
+    @Test
+    void updateBalancePessimisticFailsRequestOnAccountNotFound() {
+        UpdateBalanceRequest request = new UpdateBalanceRequest(null, 11L, BigDecimal.ONE);
+        UUID requestId = UUID.randomUUID();
+
+        when(requestService.createPendingRequestIfAbsent(null, request, RequestType.UPDATE_BALANCE_PESSIMISTIC, AUTH_CLIENT_ID))
+                .thenReturn(new RequestService.CreateRequestResult(requestId, false, RequestStatus.PENDING, null));
+        when(accountRepository.findByClientIdAndAuthClientIdForPessimisticUpdate(11L, AUTH_CLIENT_ID))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> accountService.updateBalancePessimistic(request))
+                .isInstanceOf(AccountNotFoundException.class);
+        verify(requestService).failRequest(eq(requestId), eq(AUTH_CLIENT_ID), any(String.class));
+    }
+
+    @Test
+    void markRequestFailedSwallowsExceptionWhenFailRequestThrows() {
+        UUID requestId = UUID.randomUUID();
+        UpdateBalanceRequest request = new UpdateBalanceRequest(null, 11L, BigDecimal.ONE);
+
+        when(requestService.createPendingRequestIfAbsent(null, request, RequestType.UPDATE_BALANCE_PESSIMISTIC, AUTH_CLIENT_ID))
+                .thenReturn(new RequestService.CreateRequestResult(requestId, false, RequestStatus.PENDING, null));
+        when(accountRepository.findByClientIdAndAuthClientIdForPessimisticUpdate(11L, AUTH_CLIENT_ID))
+                .thenReturn(Optional.empty());
+        doThrow(new lt.satsyuk.exception.RequestNotFoundException(requestId))
+                .when(requestService).failRequest(eq(requestId), eq(AUTH_CLIENT_ID), any(String.class));
+
+        assertThatThrownBy(() -> accountService.updateBalancePessimistic(request))
+                .isInstanceOf(AccountNotFoundException.class);
+        verify(requestService).failRequest(eq(requestId), eq(AUTH_CLIENT_ID), any(String.class));
+    }
 }
