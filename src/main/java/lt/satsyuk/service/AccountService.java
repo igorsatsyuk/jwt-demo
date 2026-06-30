@@ -8,7 +8,6 @@ import lt.satsyuk.dto.AccountResponse;
 import lt.satsyuk.dto.UpdateBalanceRequest;
 import lt.satsyuk.exception.AccountNotFoundException;
 import lt.satsyuk.exception.AccountOptimisticLockException;
-import lt.satsyuk.exception.AccountUpdateFailedException;
 import lt.satsyuk.exception.AccountUpdateInProgressException;
 import lt.satsyuk.mapper.AccountMapper;
 import lt.satsyuk.model.Account;
@@ -24,7 +23,6 @@ import org.springframework.transaction.support.TransactionTemplate;
 import java.math.BigDecimal;
 import java.util.Objects;
 import java.util.UUID;
-import java.util.function.Supplier;
 
 @Slf4j
 @Service
@@ -62,13 +60,25 @@ public class AccountService {
             return handleExistingRequest(result);
         }
 
-        return executeWithRequestTracking(result.requestId(), authClientId, () -> {
+        UUID requestId = result.requestId();
+        try {
             Account account = accountRepository.findByClientIdAndAuthClientIdForPessimisticUpdate(request.clientId(), authClientId)
                     .orElseThrow(() -> new AccountNotFoundException(request.clientId()));
             account.updateBalance(account.getBalance().add(request.amount()));
             Account saved = accountRepository.saveAndFlush(account);
-            return accountMapper.toResponse(saved);
-        });
+            AccountResponse response = accountMapper.toResponse(saved);
+            requestService.completeRequest(requestId, authClientId, writeJson(AppResponse.ok(response)));
+            return response;
+        } catch (AccountNotFoundException ex) {
+            markRequestFailed(requestId, authClientId, ex);
+            throw ex;
+        } catch (AccountOptimisticLockException ex) {
+            markRequestFailed(requestId, authClientId, ex);
+            throw ex;
+        } catch (RuntimeException ex) {
+            markRequestFailed(requestId, authClientId, ex);
+            throw ex;
+        }
     }
 
     public AccountResponse updateBalanceOptimistic(UpdateBalanceRequest request) {
@@ -80,23 +90,19 @@ public class AccountService {
             return handleExistingRequest(result);
         }
 
-        return executeWithRequestTracking(result.requestId(), authClientId, () ->
-                safeUpdate(request.clientId(), request.amount(), authClientId));
-    }
-
-    private AccountResponse executeWithRequestTracking(UUID requestId, String authClientId, Supplier<AccountResponse> action) {
+        UUID requestId = result.requestId();
         try {
-            AccountResponse response = action.get();
-            requestService.completeRequest(requestId, authClientId, writeJson(AppResponse.ok(response)));
+            AccountResponse response = safeUpdate(request.clientId(), request.amount(), authClientId,
+                    requestId, authClientId);
             return response;
         } catch (AccountNotFoundException ex) {
-            markRequestFailed(requestId, authClientId, AppResponse.error(AppResponse.ErrorCode.NOT_FOUND.getCode(), ex.getMessage()));
+            markRequestFailed(requestId, authClientId, ex);
             throw ex;
         } catch (AccountOptimisticLockException ex) {
-            markRequestFailed(requestId, authClientId, AppResponse.error(AppResponse.ErrorCode.CONFLICT.getCode(), ex.getMessage()));
+            markRequestFailed(requestId, authClientId, ex);
             throw ex;
         } catch (RuntimeException ex) {
-            markRequestFailed(requestId, authClientId, AppResponse.error(AppResponse.ErrorCode.INTERNAL_SERVER_ERROR.getCode(), "Internal server error"));
+            markRequestFailed(requestId, authClientId, ex);
             throw ex;
         }
     }
@@ -107,34 +113,36 @@ public class AccountService {
         return accountMapper.toResponse(account);
     }
 
-    public AccountResponse safeUpdate(Long clientId, BigDecimal amount, String authClientId) {
+    public AccountResponse safeUpdate(Long clientId, BigDecimal amount, String authClientId,
+                                      UUID requestId, String requestAuthClientId) {
         for (int i = 0; i < MAX_OPTIMISTIC_RETRIES; i++) {
             try {
                 return Objects.requireNonNull(
-                        transactionTemplate.execute(status -> updateBalanceOptimisticTx(clientId, amount, authClientId)),
+                        transactionTemplate.execute(status -> {
+                            AccountResponse response = updateBalanceOptimisticTx(clientId, amount, authClientId);
+                            requestService.completeRequest(requestId, requestAuthClientId,
+                                    writeJson(AppResponse.ok(response)));
+                            return response;
+                        }),
                         "Transaction returned null result"
                 );
             } catch (RuntimeException ex) {
                 if (!isOptimisticConflict(ex)) {
                     throw ex;
                 }
-
                 if (i == MAX_OPTIMISTIC_RETRIES - 1) {
                     throw new AccountOptimisticLockException(clientId);
                 }
             }
         }
-
         throw new AccountOptimisticLockException(clientId);
     }
 
     protected AccountResponse updateBalanceOptimisticTx(Long clientId, BigDecimal amount, String authClientId) {
         Account account = accountRepository.findByClientIdAndAuthClientId(clientId, authClientId)
                 .orElseThrow(() -> new AccountNotFoundException(clientId));
-
         account.updateBalance(account.getBalance().add(amount));
         Account saved = accountRepository.saveAndFlush(account);
-
         return accountMapper.toResponse(saved);
     }
 
@@ -158,14 +166,32 @@ public class AccountService {
     private AccountResponse handleExistingRequest(RequestService.CreateRequestResult result) {
         return switch (result.status()) {
             case COMPLETED -> readSavedResponse(result.savedResponseData());
-            case FAILED -> {
-                AppResponse<AccountResponse> errorResponse = parseErrorResponse(result.savedResponseData());
-                int code = errorResponse != null ? errorResponse.code() : AppResponse.ErrorCode.INTERNAL_SERVER_ERROR.getCode();
-                String message = errorResponse != null ? errorResponse.message() : "Request failed";
-                throw new AccountUpdateFailedException(code, message);
-            }
+            case FAILED -> rethrowStoredException(result.savedResponseData());
             case PENDING, PROCESSING -> throw new AccountUpdateInProgressException(result.requestId());
         };
+    }
+
+    private AccountResponse rethrowStoredException(String responseData) {
+        StoredError stored = parseStoredError(responseData);
+        if (stored == null) {
+            throw new IllegalStateException("Request failed with unknown error");
+        }
+        throw switch (stored.exceptionType()) {
+            case "AccountNotFoundException" -> new AccountNotFoundException(stored.clientId());
+            case "AccountOptimisticLockException" -> new AccountOptimisticLockException(stored.clientId());
+            default -> new IllegalStateException(stored.message());
+        };
+    }
+
+    StoredError parseStoredError(String responseData) {
+        if (responseData == null || responseData.isBlank()) {
+            return null;
+        }
+        try {
+            return objectMapper.readValue(responseData, StoredError.class);
+        } catch (JsonProcessingException _) {
+            return null;
+        }
     }
 
     AppResponse<AccountResponse> parseErrorResponse(String responseData) {
@@ -188,11 +214,24 @@ public class AccountService {
         }
     }
 
-    private void markRequestFailed(UUID requestId, String authClientId, AppResponse<AccountResponse> errorResponse) {
+    private void markRequestFailed(UUID requestId, String authClientId, RuntimeException ex) {
+        StoredError stored = switch (ex) {
+            case AccountNotFoundException e -> new StoredError(
+                    AppResponse.ErrorCode.NOT_FOUND.getCode(), e.getMessage(),
+                    e.getClass().getSimpleName(), e.getClientId());
+            case AccountOptimisticLockException e -> new StoredError(
+                    AppResponse.ErrorCode.CONFLICT.getCode(), e.getMessage(),
+                    e.getClass().getSimpleName(), e.getClientId());
+            default -> new StoredError(
+                    AppResponse.ErrorCode.INTERNAL_SERVER_ERROR.getCode(), "Internal server error",
+                    ex.getClass().getSimpleName(), null);
+        };
         try {
-            requestService.failRequest(requestId, authClientId, writeJson(errorResponse));
-        } catch (RuntimeException ex) {
-            log.warn("Failed to mark request {} as FAILED: {}", requestId, ex.getMessage());
+            requestService.failRequest(requestId, authClientId, writeJson(stored));
+        } catch (RuntimeException ex2) {
+            log.warn("Failed to mark request {} as FAILED: {}", requestId, ex2.getMessage());
         }
     }
+
+    public record StoredError(int code, String message, String exceptionType, Long clientId) {}
 }

@@ -12,7 +12,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 
-
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
@@ -60,5 +60,43 @@ class GlobalExceptionHandlerTest {
         assertThat(response.getBody()).isNotNull();
         assertThat(response.getBody().code()).isEqualTo(AppResponse.ErrorCode.BAD_REQUEST.getCode());
         assertThat(response.getBody().message()).isEqualTo("Invalid request payload");
+    }
+
+    @Test
+    void handleAccountUpdateFailedReturnsCorrectStatus() {
+        AccountUpdateFailedException ex = new AccountUpdateFailedException(40401, "Account not found");
+        when(messageService.getMessage("error.account.updateFailed", new Object[]{"Account not found"}))
+                .thenReturn("Ошибка обновления баланса: Account not found");
+
+        ResponseEntity<AppResponse<Void>> response = handler.handleAccountUpdateFailed(ex);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().code()).isEqualTo(40401);
+    }
+
+    @Test
+    void handleAccountUpdateFailedReturns500ForInternalError() {
+        AccountUpdateFailedException ex = new AccountUpdateFailedException(50000, "Internal server error");
+        when(messageService.getMessage("error.account.updateFailed", new Object[]{"Internal server error"}))
+                .thenReturn("Ошибка обновления баланса: Internal server error");
+
+        ResponseEntity<AppResponse<Void>> response = handler.handleAccountUpdateFailed(ex);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+
+    @Test
+    void handleAccountUpdateInProgressReturns409() {
+        UUID requestId = UUID.randomUUID();
+        AccountUpdateInProgressException ex = new AccountUpdateInProgressException(requestId);
+        when(messageService.getMessage("error.account.updateInProgress", new Object[]{requestId.toString()}))
+                .thenReturn("Запрос на обновление баланса ещё выполняется: " + requestId);
+
+        ResponseEntity<AppResponse<Void>> response = handler.handleAccountUpdateInProgress(ex);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().code()).isEqualTo(AppResponse.ErrorCode.CONFLICT.getCode());
     }
 }

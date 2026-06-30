@@ -402,4 +402,63 @@ class RequestServiceTest {
         verify(requestRepository, never()).findById(any(RequestId.class));
         verify(requestRepository).save(any(Request.class));
     }
+
+    @Test
+    void createPendingRequestIfAbsentThrowsConflictForSameKeyDifferentType() throws Exception {
+        UUID idempotencyKey = UUID.randomUUID();
+        lt.satsyuk.dto.UpdateBalanceRequest payload = new lt.satsyuk.dto.UpdateBalanceRequest(idempotencyKey, 1L, new java.math.BigDecimal("50.00"));
+        OffsetDateTime now = OffsetDateTime.now();
+        Request existingRequest = Request.builder()
+                .requestId(new RequestId(idempotencyKey, CLIENT_ID))
+                .type(RequestType.UPDATE_BALANCE_OPTIMISTIC)
+                .status(RequestStatus.COMPLETED)
+                .createdAt(now)
+                .statusChangedAt(now)
+                .requestData(objectMapper.writeValueAsString(payload))
+                .build();
+        when(requestRepository.findById(new RequestId(idempotencyKey, CLIENT_ID)))
+                .thenReturn(Optional.of(existingRequest));
+
+        assertThatThrownBy(() -> requestService.createPendingRequestIfAbsent(
+                idempotencyKey, payload, RequestType.UPDATE_BALANCE_PESSIMISTIC, CLIENT_ID))
+                .isInstanceOf(IdempotencyKeyConflictException.class);
+    }
+
+    @Test
+    void createPendingRequestIfAbsentThrowsConflictOnRetryWithTypeMismatch() throws Exception {
+        UUID idempotencyKey = UUID.randomUUID();
+        lt.satsyuk.dto.UpdateBalanceRequest payload = new lt.satsyuk.dto.UpdateBalanceRequest(idempotencyKey, 1L, new java.math.BigDecimal("50.00"));
+        OffsetDateTime now = OffsetDateTime.now();
+        Request existingRequest = Request.builder()
+                .requestId(new RequestId(idempotencyKey, CLIENT_ID))
+                .type(RequestType.UPDATE_BALANCE_OPTIMISTIC)
+                .status(RequestStatus.PENDING)
+                .createdAt(now)
+                .statusChangedAt(now)
+                .requestData(objectMapper.writeValueAsString(payload))
+                .build();
+        when(requestRepository.findById(new RequestId(idempotencyKey, CLIENT_ID)))
+                .thenReturn(Optional.empty())
+                .thenReturn(Optional.of(existingRequest));
+        when(requestRepository.save(any(Request.class)))
+                .thenThrow(new org.springframework.dao.DataIntegrityViolationException("PK violation"));
+
+        assertThatThrownBy(() -> requestService.createPendingRequestIfAbsent(
+                idempotencyKey, payload, RequestType.UPDATE_BALANCE_PESSIMISTIC, CLIENT_ID))
+                .isInstanceOf(IdempotencyKeyConflictException.class);
+    }
+
+    @Test
+    void createPendingRequestIfAbsentRethrowsOnRetryWithNoExistingRow() {
+        UUID idempotencyKey = UUID.randomUUID();
+        lt.satsyuk.dto.UpdateBalanceRequest payload = new lt.satsyuk.dto.UpdateBalanceRequest(idempotencyKey, 1L, new java.math.BigDecimal("50.00"));
+        when(requestRepository.save(any(Request.class)))
+                .thenThrow(new org.springframework.dao.DataIntegrityViolationException("PK violation"));
+        when(requestRepository.findById(new RequestId(idempotencyKey, CLIENT_ID)))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> requestService.createPendingRequestIfAbsent(
+                idempotencyKey, payload, RequestType.UPDATE_BALANCE_PESSIMISTIC, CLIENT_ID))
+                .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+    }
 }

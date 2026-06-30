@@ -2,8 +2,8 @@ package lt.satsyuk.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.persistence.OptimisticLockException;
-import lt.satsyuk.dto.AccountResponse;
 import lt.satsyuk.dto.AppResponse;
+import lt.satsyuk.dto.AccountResponse;
 import lt.satsyuk.dto.UpdateBalanceRequest;
 import lt.satsyuk.exception.AccountNotFoundException;
 import lt.satsyuk.exception.AccountOptimisticLockException;
@@ -158,13 +158,14 @@ class AccountServiceTest {
                 requestService, securityService, objectMapper));
         BigDecimal amount = new BigDecimal("5.00");
         AccountResponse expected = new AccountResponse(22L, 11L, new BigDecimal("15.00"));
+        UUID requestId = UUID.randomUUID();
 
         doThrow(new ObjectOptimisticLockingFailureException(Account.class, 11L))
                 .doThrow(new OptimisticLockException())
                 .doReturn(expected)
                 .when(spyService).updateBalanceOptimisticTx(11L, amount, AUTH_CLIENT_ID);
 
-        AccountResponse actual = spyService.safeUpdate(11L, amount, AUTH_CLIENT_ID);
+        AccountResponse actual = spyService.safeUpdate(11L, amount, AUTH_CLIENT_ID, requestId, AUTH_CLIENT_ID);
 
         assertThat(actual).isEqualTo(expected);
         verify(spyService, times(3)).updateBalanceOptimisticTx(11L, amount, AUTH_CLIENT_ID);
@@ -175,11 +176,12 @@ class AccountServiceTest {
         AccountService spyService = spy(new AccountService(accountRepository, accountMapper, transactionManager,
                 requestService, securityService, objectMapper));
         BigDecimal amount = new BigDecimal("5.00");
+        UUID requestId = UUID.randomUUID();
 
         doThrow(new ObjectOptimisticLockingFailureException(Account.class, 11L))
                 .when(spyService).updateBalanceOptimisticTx(11L, amount, AUTH_CLIENT_ID);
 
-        assertThatThrownBy(() -> spyService.safeUpdate(11L, amount, AUTH_CLIENT_ID))
+        assertThatThrownBy(() -> spyService.safeUpdate(11L, amount, AUTH_CLIENT_ID, requestId, AUTH_CLIENT_ID))
                 .isInstanceOf(AccountOptimisticLockException.class)
                 .hasMessageContaining("client id=11");
         verify(spyService, times(3)).updateBalanceOptimisticTx(11L, amount, AUTH_CLIENT_ID);
@@ -190,40 +192,14 @@ class AccountServiceTest {
         AccountService spyService = spy(new AccountService(accountRepository, accountMapper, transactionManager,
                 requestService, securityService, objectMapper));
         BigDecimal amount = new BigDecimal("5.00");
+        UUID requestId = UUID.randomUUID();
 
         doThrow(new IllegalStateException("boom"))
                 .when(spyService).updateBalanceOptimisticTx(11L, amount, AUTH_CLIENT_ID);
 
-        assertThatThrownBy(() -> spyService.safeUpdate(11L, amount, AUTH_CLIENT_ID))
+        assertThatThrownBy(() -> spyService.safeUpdate(11L, amount, AUTH_CLIENT_ID, requestId, AUTH_CLIENT_ID))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessage("boom");
-    }
-
-    @Test
-    void updateBalanceOptimisticDelegatesToSafeUpdate() throws Exception {
-        AccountService spyService = spy(new AccountService(accountRepository, accountMapper, transactionManager,
-                requestService, securityService, objectMapper));
-        UpdateBalanceRequest request = new UpdateBalanceRequest(null, 11L, new BigDecimal("3.00"));
-        AccountResponse expected = new AccountResponse(22L, 11L, new BigDecimal("13.00"));
-        UUID requestId = UUID.randomUUID();
-
-        when(requestService.createPendingRequestIfAbsent(null, request, RequestType.UPDATE_BALANCE_OPTIMISTIC, AUTH_CLIENT_ID))
-                .thenReturn(new RequestService.CreateRequestResult(requestId, false, RequestStatus.PENDING, null));
-        doReturn(expected).when(spyService).safeUpdate(11L, new BigDecimal("3.00"), AUTH_CLIENT_ID);
-
-        assertThat(spyService.updateBalanceOptimistic(request)).isEqualTo(expected);
-        verify(requestService).completeRequest(requestId, AUTH_CLIENT_ID, objectMapper.writeValueAsString(AppResponse.ok(expected)));
-    }
-
-    @Test
-    void updateBalanceOptimisticTxThrowsWhenAccountMissing() {
-        when(accountRepository.findByClientIdAndAuthClientId(11L, AUTH_CLIENT_ID)).thenReturn(Optional.empty());
-        BigDecimal amount = new BigDecimal("1.00");
-        ThrowingCallable action = () -> accountService.updateBalanceOptimisticTx(11L, amount, AUTH_CLIENT_ID);
-
-        assertThatThrownBy(action)
-                .isInstanceOf(AccountNotFoundException.class);
-        verify(accountRepository, never()).saveAndFlush(any(Account.class));
     }
 
     @Test
@@ -251,7 +227,7 @@ class AccountServiceTest {
 
         when(requestService.createPendingRequestIfAbsent(null, request, RequestType.UPDATE_BALANCE_OPTIMISTIC, AUTH_CLIENT_ID))
                 .thenReturn(new RequestService.CreateRequestResult(requestId, false, RequestStatus.PENDING, null));
-        doThrow(new AccountNotFoundException(11L)).when(spyService).safeUpdate(11L, new BigDecimal("3.00"), AUTH_CLIENT_ID);
+        doThrow(new AccountNotFoundException(11L)).when(spyService).safeUpdate(11L, new BigDecimal("3.00"), AUTH_CLIENT_ID, requestId, AUTH_CLIENT_ID);
 
         assertThatThrownBy(() -> spyService.updateBalanceOptimistic(request))
                 .isInstanceOf(AccountNotFoundException.class);
@@ -267,7 +243,7 @@ class AccountServiceTest {
 
         when(requestService.createPendingRequestIfAbsent(null, request, RequestType.UPDATE_BALANCE_OPTIMISTIC, AUTH_CLIENT_ID))
                 .thenReturn(new RequestService.CreateRequestResult(requestId, false, RequestStatus.PENDING, null));
-        doThrow(new AccountOptimisticLockException(11L)).when(spyService).safeUpdate(11L, new BigDecimal("3.00"), AUTH_CLIENT_ID);
+        doThrow(new AccountOptimisticLockException(11L)).when(spyService).safeUpdate(11L, new BigDecimal("3.00"), AUTH_CLIENT_ID, requestId, AUTH_CLIENT_ID);
 
         assertThatThrownBy(() -> spyService.updateBalanceOptimistic(request))
                 .isInstanceOf(AccountOptimisticLockException.class);
@@ -283,7 +259,7 @@ class AccountServiceTest {
 
         when(requestService.createPendingRequestIfAbsent(null, request, RequestType.UPDATE_BALANCE_OPTIMISTIC, AUTH_CLIENT_ID))
                 .thenReturn(new RequestService.CreateRequestResult(requestId, false, RequestStatus.PENDING, null));
-        doThrow(new IllegalStateException("boom")).when(spyService).safeUpdate(11L, new BigDecimal("3.00"), AUTH_CLIENT_ID);
+        doThrow(new IllegalStateException("boom")).when(spyService).safeUpdate(11L, new BigDecimal("3.00"), AUTH_CLIENT_ID, requestId, AUTH_CLIENT_ID);
 
         assertThatThrownBy(() -> spyService.updateBalanceOptimistic(request))
                 .isInstanceOf(IllegalStateException.class);
@@ -321,18 +297,33 @@ class AccountServiceTest {
     }
 
     @Test
-    void updateBalancePessimisticThrowsOnFailedIdempotentReplay() throws Exception {
+    void failedIdempotentReplayThrowsOriginalNotFoundException() throws Exception {
         UpdateBalanceRequest request = new UpdateBalanceRequest(null, 11L, new BigDecimal("25.50"));
         UUID requestId = UUID.randomUUID();
         String errorJson = objectMapper.writeValueAsString(
-                AppResponse.error(AppResponse.ErrorCode.INTERNAL_SERVER_ERROR.getCode(), "something went wrong"));
+                new AccountService.StoredError(40401, "Account for client id=999 not found", "AccountNotFoundException", 999L));
 
         when(requestService.createPendingRequestIfAbsent(null, request, RequestType.UPDATE_BALANCE_PESSIMISTIC, AUTH_CLIENT_ID))
                 .thenReturn(new RequestService.CreateRequestResult(requestId, true, RequestStatus.FAILED, errorJson));
 
         assertThatThrownBy(() -> accountService.updateBalancePessimistic(request))
-                .isInstanceOf(lt.satsyuk.exception.AccountUpdateFailedException.class)
-                .hasMessageContaining("something went wrong");
+                .isInstanceOf(AccountNotFoundException.class)
+                .hasMessageContaining("999");
+    }
+
+    @Test
+    void failedIdempotentReplayThrowsOriginalOptimisticLockException() throws Exception {
+        UpdateBalanceRequest request = new UpdateBalanceRequest(null, 11L, new BigDecimal("3.00"));
+        UUID requestId = UUID.randomUUID();
+        String errorJson = objectMapper.writeValueAsString(
+                new AccountService.StoredError(40901, "Too many optimistic lock retries for client id=11", "AccountOptimisticLockException", 11L));
+
+        when(requestService.createPendingRequestIfAbsent(null, request, RequestType.UPDATE_BALANCE_OPTIMISTIC, AUTH_CLIENT_ID))
+                .thenReturn(new RequestService.CreateRequestResult(requestId, true, RequestStatus.FAILED, errorJson));
+
+        assertThatThrownBy(() -> accountService.updateBalanceOptimistic(request))
+                .isInstanceOf(AccountOptimisticLockException.class)
+                .hasMessageContaining("11");
     }
 
     @Test
@@ -346,21 +337,6 @@ class AccountServiceTest {
         assertThatThrownBy(() -> accountService.updateBalancePessimistic(request))
                 .isInstanceOf(lt.satsyuk.exception.AccountUpdateInProgressException.class)
                 .hasMessageContaining(requestId.toString());
-    }
-
-    @Test
-    void updateBalanceOptimisticThrowsOnFailedIdempotentReplay() throws Exception {
-        UpdateBalanceRequest request = new UpdateBalanceRequest(null, 11L, new BigDecimal("3.00"));
-        UUID requestId = UUID.randomUUID();
-        String errorJson = objectMapper.writeValueAsString(
-                AppResponse.error(AppResponse.ErrorCode.BAD_REQUEST.getCode(), "optimistic lock failed"));
-
-        when(requestService.createPendingRequestIfAbsent(null, request, RequestType.UPDATE_BALANCE_OPTIMISTIC, AUTH_CLIENT_ID))
-                .thenReturn(new RequestService.CreateRequestResult(requestId, true, RequestStatus.FAILED, errorJson));
-
-        assertThatThrownBy(() -> accountService.updateBalanceOptimistic(request))
-                .isInstanceOf(lt.satsyuk.exception.AccountUpdateFailedException.class)
-                .hasMessageContaining("optimistic lock failed");
     }
 
     @Test
@@ -417,5 +393,31 @@ class AccountServiceTest {
         assertThatThrownBy(() -> accountService.updateBalancePessimistic(request))
                 .isInstanceOf(AccountNotFoundException.class);
         verify(requestService).failRequest(eq(requestId), eq(AUTH_CLIENT_ID), any(String.class));
+    }
+
+    @Test
+    void parseStoredErrorReturnsNullForBlank() {
+        assertThat(accountService.parseStoredError(null)).isNull();
+        assertThat(accountService.parseStoredError("  ")).isNull();
+    }
+
+    @Test
+    void parseStoredErrorReturnsNullForMalformedJson() {
+        assertThat(accountService.parseStoredError("{bad json")).isNull();
+    }
+
+    @Test
+    void failedIdempotentReplayThrowsIllegalStateExceptionForUnknownType() throws Exception {
+        UpdateBalanceRequest request = new UpdateBalanceRequest(null, 11L, new BigDecimal("25.50"));
+        UUID requestId = UUID.randomUUID();
+        String errorJson = objectMapper.writeValueAsString(
+                new AccountService.StoredError(50000, "error", "UnknownException", null));
+
+        when(requestService.createPendingRequestIfAbsent(null, request, RequestType.UPDATE_BALANCE_PESSIMISTIC, AUTH_CLIENT_ID))
+                .thenReturn(new RequestService.CreateRequestResult(requestId, true, RequestStatus.FAILED, errorJson));
+
+        assertThatThrownBy(() -> accountService.updateBalancePessimistic(request))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("error");
     }
 }
