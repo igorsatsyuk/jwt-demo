@@ -17,6 +17,7 @@ import lombok.RequiredArgsConstructor;
 import org.quartz.SchedulerException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
@@ -133,7 +134,7 @@ public class RequestService {
                 if (existing.getType() == type && existing.getRequestData().equals(payloadJson)) {
                     return new CreateRequestResult(existing.getId(), true, existing.getStatus(), existing.getResponseData());
                 }
-                throw new IdempotencyKeyConflictException(idempotencyKey.toString());
+                throw new IdempotencyKeyConflictException(String.valueOf(requestId));
             }
             throw ex;
         }
@@ -147,7 +148,7 @@ public class RequestService {
         request.markCompleted(responseData, now());
     }
 
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void failRequest(UUID requestId, String authClientId, String errorData) {
         Request request = requestRepository.findById(new RequestId(requestId, authClientId))
                 .orElseThrow(() -> new RequestNotFoundException(requestId));

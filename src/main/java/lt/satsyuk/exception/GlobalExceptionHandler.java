@@ -75,10 +75,11 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(AccountUpdateFailedException.class)
     public ResponseEntity<AppResponse<Void>> handleAccountUpdateFailed(AccountUpdateFailedException ex) {
         String message = messageService.getMessage(ex.getMessageCode(), new Object[]{ex.getErrorMessage()});
+        HttpStatus status = resolveHttpStatus(ex.getErrorCode());
         return ResponseEntity
-                .status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .status(status)
                 .contentType(MediaType.APPLICATION_JSON)
-                .body(AppResponse.<Void>error(AppResponse.ErrorCode.INTERNAL_SERVER_ERROR.getCode(), message));
+                .body(AppResponse.<Void>error(ex.getErrorCode(), message));
     }
 
     @ExceptionHandler(AccountUpdateInProgressException.class)
@@ -162,5 +163,17 @@ public class GlobalExceptionHandler {
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(AppResponse.<Void>error(AppResponse.ErrorCode.INTERNAL_SERVER_ERROR.getCode(),
                         messageService.getMessage("api.error.internalServerError")));
+    }
+
+    private HttpStatus resolveHttpStatus(int appErrorCode) {
+        return switch (appErrorCode / 100) {
+            case 400 -> HttpStatus.BAD_REQUEST;
+            case 401 -> HttpStatus.UNAUTHORIZED;
+            case 403 -> HttpStatus.FORBIDDEN;
+            case 404 -> HttpStatus.NOT_FOUND;
+            case 409 -> HttpStatus.CONFLICT;
+            case 429 -> HttpStatus.TOO_MANY_REQUESTS;
+            default -> HttpStatus.INTERNAL_SERVER_ERROR;
+        };
     }
 }

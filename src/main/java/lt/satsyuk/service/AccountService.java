@@ -175,7 +175,9 @@ public class AccountService {
             case COMPLETED -> readSavedResponse(result.savedResponseData());
             case FAILED -> {
                 AppResponse<AccountResponse> errorResponse = parseErrorResponse(result.savedResponseData());
-                throw new AccountUpdateFailedException(errorResponse != null ? errorResponse.message() : "Request failed");
+                int code = errorResponse != null ? errorResponse.code() : AppResponse.ErrorCode.INTERNAL_SERVER_ERROR.getCode();
+                String message = errorResponse != null ? errorResponse.message() : "Request failed";
+                throw new AccountUpdateFailedException(code, message);
             }
             case PENDING, PROCESSING -> throw new AccountUpdateInProgressException(result.requestId());
         };

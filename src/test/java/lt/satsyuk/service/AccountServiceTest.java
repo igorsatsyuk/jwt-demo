@@ -103,12 +103,13 @@ class AccountServiceTest {
 
     @Test
     void updateBalancePessimisticReturnsExistingResultForIdempotentReplay() throws Exception {
-        UpdateBalanceRequest request = new UpdateBalanceRequest(null, 11L, new BigDecimal("25.50"));
+        UUID idempotencyKey = UUID.randomUUID();
+        UpdateBalanceRequest request = new UpdateBalanceRequest(idempotencyKey, 11L, new BigDecimal("25.50"));
         AccountResponse savedResponse = new AccountResponse(22L, 11L, new BigDecimal("125.50"));
         String savedResponseJson = objectMapper.writeValueAsString(AppResponse.ok(savedResponse));
         UUID requestId = UUID.randomUUID();
 
-        when(requestService.createPendingRequestIfAbsent(null, request, RequestType.UPDATE_BALANCE_PESSIMISTIC, AUTH_CLIENT_ID))
+        when(requestService.createPendingRequestIfAbsent(idempotencyKey, request, RequestType.UPDATE_BALANCE_PESSIMISTIC, AUTH_CLIENT_ID))
                 .thenReturn(new RequestService.CreateRequestResult(requestId, true, RequestStatus.COMPLETED, savedResponseJson));
 
         AccountResponse actual = accountService.updateBalancePessimistic(request);
@@ -227,12 +228,13 @@ class AccountServiceTest {
 
     @Test
     void updateBalanceOptimisticReturnsExistingResultForIdempotentReplay() throws Exception {
-        UpdateBalanceRequest request = new UpdateBalanceRequest(null, 11L, new BigDecimal("3.00"));
+        UUID idempotencyKey = UUID.randomUUID();
+        UpdateBalanceRequest request = new UpdateBalanceRequest(idempotencyKey, 11L, new BigDecimal("3.00"));
         AccountResponse savedResponse = new AccountResponse(22L, 11L, new BigDecimal("13.00"));
         String savedResponseJson = objectMapper.writeValueAsString(AppResponse.ok(savedResponse));
         UUID requestId = UUID.randomUUID();
 
-        when(requestService.createPendingRequestIfAbsent(null, request, RequestType.UPDATE_BALANCE_OPTIMISTIC, AUTH_CLIENT_ID))
+        when(requestService.createPendingRequestIfAbsent(idempotencyKey, request, RequestType.UPDATE_BALANCE_OPTIMISTIC, AUTH_CLIENT_ID))
                 .thenReturn(new RequestService.CreateRequestResult(requestId, true, RequestStatus.COMPLETED, savedResponseJson));
 
         AccountResponse actual = accountService.updateBalanceOptimistic(request);
