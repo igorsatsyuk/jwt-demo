@@ -36,6 +36,8 @@ public class RequestService {
     private final MessageService messageService;
     private final SecurityService securityService;
 
+    public record CreateRequestResult(UUID requestId, boolean alreadyExisted, String savedResponseData) {}
+
     public RequestAcceptedResponse submitClientCreateRequest(CreateClientRequest createClientRequest) {
         OffsetDateTime now = now();
         String currentClientId = securityService.clientId();
@@ -93,6 +95,50 @@ public class RequestService {
                 request.getStatusChangedAt(),
                 readJson(request.getResponseData())
         );
+    }
+
+    public CreateRequestResult createPendingRequestIfAbsent(UUID idempotencyKey, Object payload,
+                                                            RequestType type, String authClientId) {
+        OffsetDateTime now = now();
+        String payloadJson = writeJson(payload);
+
+        if (idempotencyKey != null) {
+            Optional<Request> existing = requestRepository.findById(
+                    new RequestId(idempotencyKey, authClientId));
+            if (existing.isPresent()) {
+                Request request = existing.get();
+                if (request.getRequestData().equals(payloadJson)) {
+                    return new CreateRequestResult(request.getId(), true, request.getResponseData());
+                }
+                throw new IdempotencyKeyConflictException(idempotencyKey.toString());
+            }
+        }
+
+        UUID requestId = idempotencyKey != null ? idempotencyKey : UUID.randomUUID();
+        Request request = Request.builder()
+                .requestId(new RequestId(requestId, authClientId))
+                .type(type)
+                .status(RequestStatus.PENDING)
+                .createdAt(now)
+                .statusChangedAt(now)
+                .requestData(payloadJson)
+                .build();
+        requestRepository.save(request);
+        return new CreateRequestResult(requestId, false, null);
+    }
+
+    @Transactional
+    public void completeRequest(UUID requestId, String authClientId, String responseData) {
+        Request request = requestRepository.findById(new RequestId(requestId, authClientId))
+                .orElseThrow(() -> new RequestNotFoundException(requestId));
+        request.markCompleted(responseData, now());
+    }
+
+    @Transactional
+    public void failRequest(UUID requestId, String authClientId, String errorData) {
+        Request request = requestRepository.findById(new RequestId(requestId, authClientId))
+                .orElseThrow(() -> new RequestNotFoundException(requestId));
+        request.markFailed(errorData, now());
     }
 
 

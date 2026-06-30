@@ -48,8 +48,10 @@ public class AccountController {
             content = @Content(mediaType = "application/json"))
     @ApiResponse(responseCode = "404", description = "Account not found",
             content = @Content(mediaType = "application/json"))
+    @ApiResponse(responseCode = "409", description = "Idempotency key conflict",
+            content = @Content(mediaType = "application/json"))
     public AppResponse<AccountResponse> updateBalancePessimistic(@Valid @RequestBody UpdateBalanceRequest request) {
-        return AppResponse.ok(accountService.updateBalancePessimistic(request, securityService.clientId()));
+        return AppResponse.ok(accountService.updateBalancePessimistic(request));
     }
 
     @PostMapping("/balance/optimistic")
@@ -66,10 +68,10 @@ public class AccountController {
             content = @Content(mediaType = "application/json"))
     @ApiResponse(responseCode = "404", description = "Account not found",
             content = @Content(mediaType = "application/json"))
-    @ApiResponse(responseCode = "409", description = "Optimistic lock conflict",
+    @ApiResponse(responseCode = "409", description = "Idempotency key conflict or optimistic lock conflict",
             content = @Content(mediaType = "application/json"))
     public AppResponse<AccountResponse> updateBalanceOptimistic(@Valid @RequestBody UpdateBalanceRequest request) {
-        return AppResponse.ok(accountService.updateBalanceOptimistic(request, securityService.clientId()));
+        return AppResponse.ok(accountService.updateBalanceOptimistic(request));
     }
 
     @GetMapping("/client/{clientId}")

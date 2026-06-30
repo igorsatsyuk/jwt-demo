@@ -13,6 +13,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.math.BigDecimal;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -31,34 +32,34 @@ class AccountControllerTest {
 
     @BeforeEach
     void setUp() {
-        when(securityService.clientId()).thenReturn(AUTH_CLIENT_ID);
+        lenient().when(securityService.clientId()).thenReturn(AUTH_CLIENT_ID);
         accountController = new AccountController(accountService, securityService);
     }
 
     @Test
     void updateBalancePessimisticReturnsServiceResult() {
-        UpdateBalanceRequest request = new UpdateBalanceRequest(1L, new BigDecimal("10.00"));
+        UpdateBalanceRequest request = new UpdateBalanceRequest(null, 1L, new BigDecimal("10.00"));
         AccountResponse response = new AccountResponse(2L, 1L, new BigDecimal("110.00"));
-        when(accountService.updateBalancePessimistic(request, AUTH_CLIENT_ID)).thenReturn(response);
+        when(accountService.updateBalancePessimistic(request)).thenReturn(response);
 
         var apiResponse = accountController.updateBalancePessimistic(request);
 
         assertThat(apiResponse.code()).isZero();
         assertThat(apiResponse.data()).isEqualTo(response);
-        verify(accountService).updateBalancePessimistic(request, AUTH_CLIENT_ID);
+        verify(accountService).updateBalancePessimistic(request);
     }
 
     @Test
     void updateBalanceOptimisticReturnsServiceResult() {
-        UpdateBalanceRequest request = new UpdateBalanceRequest(1L, new BigDecimal("10.00"));
+        UpdateBalanceRequest request = new UpdateBalanceRequest(null, 1L, new BigDecimal("10.00"));
         AccountResponse response = new AccountResponse(2L, 1L, new BigDecimal("110.00"));
-        when(accountService.updateBalanceOptimistic(request, AUTH_CLIENT_ID)).thenReturn(response);
+        when(accountService.updateBalanceOptimistic(request)).thenReturn(response);
 
         var apiResponse = accountController.updateBalanceOptimistic(request);
 
         assertThat(apiResponse.code()).isZero();
         assertThat(apiResponse.data()).isEqualTo(response);
-        verify(accountService).updateBalanceOptimistic(request, AUTH_CLIENT_ID);
+        verify(accountService).updateBalanceOptimistic(request);
     }
 
     @Test
