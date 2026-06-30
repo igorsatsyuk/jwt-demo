@@ -316,10 +316,8 @@ class AccountServiceTest {
     }
 
     @Test
-    void readSavedResponseThrowsForMalformedJson() {
-        assertThatThrownBy(() -> accountService.readSavedResponse("{invalid json"))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("Failed to deserialize saved response");
+    void readSavedResponseReturnsNullForMalformedJson() {
+        assertThat(accountService.readSavedResponse("{bad json")).isNull();
     }
 
     @Test

@@ -24,6 +24,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import java.math.BigDecimal;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.function.Supplier;
 
 @Slf4j
 @Service
@@ -61,25 +62,13 @@ public class AccountService {
             return handleExistingRequest(result);
         }
 
-        UUID requestId = result.requestId();
-        try {
+        return executeWithRequestTracking(result.requestId(), authClientId, () -> {
             Account account = accountRepository.findByClientIdAndAuthClientIdForPessimisticUpdate(request.clientId(), authClientId)
                     .orElseThrow(() -> new AccountNotFoundException(request.clientId()));
             account.updateBalance(account.getBalance().add(request.amount()));
             Account saved = accountRepository.saveAndFlush(account);
-            AccountResponse response = accountMapper.toResponse(saved);
-            requestService.completeRequest(requestId, authClientId, writeJson(AppResponse.ok(response)));
-            return response;
-        } catch (AccountNotFoundException ex) {
-            markRequestFailed(requestId, authClientId, AppResponse.error(AppResponse.ErrorCode.NOT_FOUND.getCode(), ex.getMessage()));
-            throw ex;
-        } catch (AccountOptimisticLockException ex) {
-            markRequestFailed(requestId, authClientId, AppResponse.error(AppResponse.ErrorCode.CONFLICT.getCode(), ex.getMessage()));
-            throw ex;
-        } catch (RuntimeException ex) {
-            markRequestFailed(requestId, authClientId, AppResponse.error(AppResponse.ErrorCode.INTERNAL_SERVER_ERROR.getCode(), "Internal server error"));
-            throw ex;
-        }
+            return accountMapper.toResponse(saved);
+        });
     }
 
     public AccountResponse updateBalanceOptimistic(UpdateBalanceRequest request) {
@@ -91,9 +80,13 @@ public class AccountService {
             return handleExistingRequest(result);
         }
 
-        UUID requestId = result.requestId();
+        return executeWithRequestTracking(result.requestId(), authClientId, () ->
+                safeUpdate(request.clientId(), request.amount(), authClientId));
+    }
+
+    private AccountResponse executeWithRequestTracking(UUID requestId, String authClientId, Supplier<AccountResponse> action) {
         try {
-            AccountResponse response = safeUpdate(request.clientId(), request.amount(), authClientId);
+            AccountResponse response = action.get();
             requestService.completeRequest(requestId, authClientId, writeJson(AppResponse.ok(response)));
             return response;
         } catch (AccountNotFoundException ex) {
@@ -158,16 +151,8 @@ public class AccountService {
     }
 
     AccountResponse readSavedResponse(String responseData) {
-        if (responseData == null || responseData.isBlank()) {
-            return null;
-        }
-        try {
-            AppResponse<AccountResponse> appResponse = objectMapper.readValue(responseData,
-                    objectMapper.getTypeFactory().constructParametricType(AppResponse.class, AccountResponse.class));
-            return appResponse.data();
-        } catch (JsonProcessingException ex) {
-            throw new IllegalStateException("Failed to deserialize saved response", ex);
-        }
+        AppResponse<AccountResponse> parsed = parseErrorResponse(responseData);
+        return parsed != null ? parsed.data() : null;
     }
 
     private AccountResponse handleExistingRequest(RequestService.CreateRequestResult result) {
