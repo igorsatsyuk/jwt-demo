@@ -15,6 +15,7 @@ import lt.satsyuk.model.RequestType;
 import lt.satsyuk.repository.RequestRepository;
 import lombok.RequiredArgsConstructor;
 import org.quartz.SchedulerException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,7 +37,7 @@ public class RequestService {
     private final MessageService messageService;
     private final SecurityService securityService;
 
-    public record CreateRequestResult(UUID requestId, boolean alreadyExisted, String savedResponseData) {}
+    public record CreateRequestResult(UUID requestId, boolean alreadyExisted, RequestStatus status, String savedResponseData) {}
 
     public RequestAcceptedResponse submitClientCreateRequest(CreateClientRequest createClientRequest) {
         OffsetDateTime now = now();
@@ -107,8 +108,8 @@ public class RequestService {
                     new RequestId(idempotencyKey, authClientId));
             if (existing.isPresent()) {
                 Request request = existing.get();
-                if (request.getRequestData().equals(payloadJson)) {
-                    return new CreateRequestResult(request.getId(), true, request.getResponseData());
+                if (request.getType() == type && request.getRequestData().equals(payloadJson)) {
+                    return new CreateRequestResult(request.getId(), true, request.getStatus(), request.getResponseData());
                 }
                 throw new IdempotencyKeyConflictException(idempotencyKey.toString());
             }
@@ -123,8 +124,20 @@ public class RequestService {
                 .statusChangedAt(now)
                 .requestData(payloadJson)
                 .build();
-        requestRepository.save(request);
-        return new CreateRequestResult(requestId, false, null);
+        try {
+            requestRepository.save(request);
+        } catch (DataIntegrityViolationException ex) {
+            Optional<Request> retry = requestRepository.findById(new RequestId(requestId, authClientId));
+            if (retry.isPresent()) {
+                Request existing = retry.get();
+                if (existing.getType() == type && existing.getRequestData().equals(payloadJson)) {
+                    return new CreateRequestResult(existing.getId(), true, existing.getStatus(), existing.getResponseData());
+                }
+                throw new IdempotencyKeyConflictException(idempotencyKey.toString());
+            }
+            throw ex;
+        }
+        return new CreateRequestResult(requestId, false, RequestStatus.PENDING, null);
     }
 
     @Transactional

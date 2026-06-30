@@ -8,8 +8,11 @@ import lt.satsyuk.dto.AccountResponse;
 import lt.satsyuk.dto.UpdateBalanceRequest;
 import lt.satsyuk.exception.AccountNotFoundException;
 import lt.satsyuk.exception.AccountOptimisticLockException;
+import lt.satsyuk.exception.AccountUpdateFailedException;
+import lt.satsyuk.exception.AccountUpdateInProgressException;
 import lt.satsyuk.mapper.AccountMapper;
 import lt.satsyuk.model.Account;
+import lt.satsyuk.model.RequestStatus;
 import lt.satsyuk.model.RequestType;
 import lt.satsyuk.repository.AccountRepository;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
@@ -54,7 +57,7 @@ public class AccountService {
                 request.idempotencyKey(), request, RequestType.UPDATE_BALANCE_PESSIMISTIC, authClientId);
 
         if (result.alreadyExisted()) {
-            return readSavedResponse(result.savedResponseData());
+            return handleExistingRequest(result);
         }
 
         UUID requestId = result.requestId();
@@ -85,7 +88,7 @@ public class AccountService {
                 request.idempotencyKey(), request, RequestType.UPDATE_BALANCE_OPTIMISTIC, authClientId);
 
         if (result.alreadyExisted()) {
-            return readSavedResponse(result.savedResponseData());
+            return handleExistingRequest(result);
         }
 
         UUID requestId = result.requestId();
@@ -165,6 +168,29 @@ public class AccountService {
             return appResponse.data();
         } catch (JsonProcessingException ex) {
             throw new IllegalStateException("Failed to deserialize saved response", ex);
+        }
+    }
+
+    private AccountResponse handleExistingRequest(RequestService.CreateRequestResult result) {
+        return switch (result.status()) {
+            case COMPLETED -> readSavedResponse(result.savedResponseData());
+            case FAILED -> {
+                AppResponse<AccountResponse> errorResponse = parseErrorResponse(result.savedResponseData());
+                throw new AccountUpdateFailedException(errorResponse != null ? errorResponse.message() : "Request failed");
+            }
+            case PENDING, PROCESSING -> throw new AccountUpdateInProgressException(result.requestId());
+        };
+    }
+
+    private AppResponse<AccountResponse> parseErrorResponse(String responseData) {
+        if (responseData == null || responseData.isBlank()) {
+            return null;
+        }
+        try {
+            return objectMapper.readValue(responseData,
+                    objectMapper.getTypeFactory().constructParametricType(AppResponse.class, AccountResponse.class));
+        } catch (JsonProcessingException ex) {
+            return null;
         }
     }
 

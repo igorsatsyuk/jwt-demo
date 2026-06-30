@@ -10,6 +10,7 @@ import lt.satsyuk.exception.AccountOptimisticLockException;
 import lt.satsyuk.mapper.AccountMapper;
 import lt.satsyuk.model.Account;
 import lt.satsyuk.model.Client;
+import lt.satsyuk.model.RequestStatus;
 import lt.satsyuk.model.RequestType;
 import lt.satsyuk.repository.AccountRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -88,7 +89,7 @@ class AccountServiceTest {
         UUID requestId = UUID.randomUUID();
 
         when(requestService.createPendingRequestIfAbsent(null, request, RequestType.UPDATE_BALANCE_PESSIMISTIC, AUTH_CLIENT_ID))
-                .thenReturn(new RequestService.CreateRequestResult(requestId, false, null));
+                .thenReturn(new RequestService.CreateRequestResult(requestId, false, RequestStatus.PENDING, null));
         when(accountRepository.findByClientIdAndAuthClientIdForPessimisticUpdate(11L, AUTH_CLIENT_ID)).thenReturn(Optional.of(account));
         when(accountRepository.saveAndFlush(account)).thenReturn(account);
         when(accountMapper.toResponse(account)).thenReturn(response);
@@ -108,7 +109,7 @@ class AccountServiceTest {
         UUID requestId = UUID.randomUUID();
 
         when(requestService.createPendingRequestIfAbsent(null, request, RequestType.UPDATE_BALANCE_PESSIMISTIC, AUTH_CLIENT_ID))
-                .thenReturn(new RequestService.CreateRequestResult(requestId, true, savedResponseJson));
+                .thenReturn(new RequestService.CreateRequestResult(requestId, true, RequestStatus.COMPLETED, savedResponseJson));
 
         AccountResponse actual = accountService.updateBalancePessimistic(request);
 
@@ -122,7 +123,7 @@ class AccountServiceTest {
         UUID requestId = UUID.randomUUID();
 
         when(requestService.createPendingRequestIfAbsent(null, request, RequestType.UPDATE_BALANCE_PESSIMISTIC, AUTH_CLIENT_ID))
-                .thenReturn(new RequestService.CreateRequestResult(requestId, false, null));
+                .thenReturn(new RequestService.CreateRequestResult(requestId, false, RequestStatus.PENDING, null));
         when(accountRepository.findByClientIdAndAuthClientIdForPessimisticUpdate(11L, AUTH_CLIENT_ID)).thenReturn(Optional.empty());
 
         ThrowingCallable action = () -> accountService.updateBalancePessimistic(request);
@@ -206,7 +207,7 @@ class AccountServiceTest {
         UUID requestId = UUID.randomUUID();
 
         when(requestService.createPendingRequestIfAbsent(null, request, RequestType.UPDATE_BALANCE_OPTIMISTIC, AUTH_CLIENT_ID))
-                .thenReturn(new RequestService.CreateRequestResult(requestId, false, null));
+                .thenReturn(new RequestService.CreateRequestResult(requestId, false, RequestStatus.PENDING, null));
         doReturn(expected).when(spyService).safeUpdate(11L, new BigDecimal("3.00"), AUTH_CLIENT_ID);
 
         assertThat(spyService.updateBalanceOptimistic(request)).isEqualTo(expected);
@@ -232,7 +233,7 @@ class AccountServiceTest {
         UUID requestId = UUID.randomUUID();
 
         when(requestService.createPendingRequestIfAbsent(null, request, RequestType.UPDATE_BALANCE_OPTIMISTIC, AUTH_CLIENT_ID))
-                .thenReturn(new RequestService.CreateRequestResult(requestId, true, savedResponseJson));
+                .thenReturn(new RequestService.CreateRequestResult(requestId, true, RequestStatus.COMPLETED, savedResponseJson));
 
         AccountResponse actual = accountService.updateBalanceOptimistic(request);
 
@@ -247,7 +248,7 @@ class AccountServiceTest {
         UUID requestId = UUID.randomUUID();
 
         when(requestService.createPendingRequestIfAbsent(null, request, RequestType.UPDATE_BALANCE_OPTIMISTIC, AUTH_CLIENT_ID))
-                .thenReturn(new RequestService.CreateRequestResult(requestId, false, null));
+                .thenReturn(new RequestService.CreateRequestResult(requestId, false, RequestStatus.PENDING, null));
         doThrow(new AccountNotFoundException(11L)).when(spyService).safeUpdate(11L, new BigDecimal("3.00"), AUTH_CLIENT_ID);
 
         assertThatThrownBy(() -> spyService.updateBalanceOptimistic(request))
@@ -263,7 +264,7 @@ class AccountServiceTest {
         UUID requestId = UUID.randomUUID();
 
         when(requestService.createPendingRequestIfAbsent(null, request, RequestType.UPDATE_BALANCE_OPTIMISTIC, AUTH_CLIENT_ID))
-                .thenReturn(new RequestService.CreateRequestResult(requestId, false, null));
+                .thenReturn(new RequestService.CreateRequestResult(requestId, false, RequestStatus.PENDING, null));
         doThrow(new AccountOptimisticLockException(11L)).when(spyService).safeUpdate(11L, new BigDecimal("3.00"), AUTH_CLIENT_ID);
 
         assertThatThrownBy(() -> spyService.updateBalanceOptimistic(request))
@@ -279,7 +280,7 @@ class AccountServiceTest {
         UUID requestId = UUID.randomUUID();
 
         when(requestService.createPendingRequestIfAbsent(null, request, RequestType.UPDATE_BALANCE_OPTIMISTIC, AUTH_CLIENT_ID))
-                .thenReturn(new RequestService.CreateRequestResult(requestId, false, null));
+                .thenReturn(new RequestService.CreateRequestResult(requestId, false, RequestStatus.PENDING, null));
         doThrow(new IllegalStateException("boom")).when(spyService).safeUpdate(11L, new BigDecimal("3.00"), AUTH_CLIENT_ID);
 
         assertThatThrownBy(() -> spyService.updateBalanceOptimistic(request))
@@ -293,7 +294,7 @@ class AccountServiceTest {
         UUID requestId = UUID.randomUUID();
 
         when(requestService.createPendingRequestIfAbsent(null, request, RequestType.UPDATE_BALANCE_PESSIMISTIC, AUTH_CLIENT_ID))
-                .thenReturn(new RequestService.CreateRequestResult(requestId, false, null));
+                .thenReturn(new RequestService.CreateRequestResult(requestId, false, RequestStatus.PENDING, null));
         when(accountRepository.findByClientIdAndAuthClientIdForPessimisticUpdate(11L, AUTH_CLIENT_ID))
                 .thenThrow(new IllegalStateException("db error"));
 
