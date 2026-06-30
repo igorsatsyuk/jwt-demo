@@ -319,4 +319,71 @@ class AccountServiceTest {
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("Failed to deserialize saved response");
     }
+
+    @Test
+    void updateBalancePessimisticThrowsOnFailedIdempotentReplay() throws Exception {
+        UpdateBalanceRequest request = new UpdateBalanceRequest(null, 11L, new BigDecimal("25.50"));
+        UUID requestId = UUID.randomUUID();
+        String errorJson = objectMapper.writeValueAsString(
+                AppResponse.error(AppResponse.ErrorCode.INTERNAL_SERVER_ERROR.getCode(), "something went wrong"));
+
+        when(requestService.createPendingRequestIfAbsent(null, request, RequestType.UPDATE_BALANCE_PESSIMISTIC, AUTH_CLIENT_ID))
+                .thenReturn(new RequestService.CreateRequestResult(requestId, true, RequestStatus.FAILED, errorJson));
+
+        assertThatThrownBy(() -> accountService.updateBalancePessimistic(request))
+                .isInstanceOf(lt.satsyuk.exception.AccountUpdateFailedException.class)
+                .hasMessageContaining("something went wrong");
+    }
+
+    @Test
+    void updateBalancePessimisticThrowsOnInProgressIdempotentReplay() {
+        UpdateBalanceRequest request = new UpdateBalanceRequest(null, 11L, new BigDecimal("25.50"));
+        UUID requestId = UUID.randomUUID();
+
+        when(requestService.createPendingRequestIfAbsent(null, request, RequestType.UPDATE_BALANCE_PESSIMISTIC, AUTH_CLIENT_ID))
+                .thenReturn(new RequestService.CreateRequestResult(requestId, true, RequestStatus.PROCESSING, null));
+
+        assertThatThrownBy(() -> accountService.updateBalancePessimistic(request))
+                .isInstanceOf(lt.satsyuk.exception.AccountUpdateInProgressException.class)
+                .hasMessageContaining(requestId.toString());
+    }
+
+    @Test
+    void updateBalanceOptimisticThrowsOnFailedIdempotentReplay() throws Exception {
+        UpdateBalanceRequest request = new UpdateBalanceRequest(null, 11L, new BigDecimal("3.00"));
+        UUID requestId = UUID.randomUUID();
+        String errorJson = objectMapper.writeValueAsString(
+                AppResponse.error(AppResponse.ErrorCode.BAD_REQUEST.getCode(), "optimistic lock failed"));
+
+        when(requestService.createPendingRequestIfAbsent(null, request, RequestType.UPDATE_BALANCE_OPTIMISTIC, AUTH_CLIENT_ID))
+                .thenReturn(new RequestService.CreateRequestResult(requestId, true, RequestStatus.FAILED, errorJson));
+
+        assertThatThrownBy(() -> accountService.updateBalanceOptimistic(request))
+                .isInstanceOf(lt.satsyuk.exception.AccountUpdateFailedException.class)
+                .hasMessageContaining("optimistic lock failed");
+    }
+
+    @Test
+    void updateBalanceOptimisticThrowsOnInProgressIdempotentReplay() {
+        UpdateBalanceRequest request = new UpdateBalanceRequest(null, 11L, new BigDecimal("3.00"));
+        UUID requestId = UUID.randomUUID();
+
+        when(requestService.createPendingRequestIfAbsent(null, request, RequestType.UPDATE_BALANCE_OPTIMISTIC, AUTH_CLIENT_ID))
+                .thenReturn(new RequestService.CreateRequestResult(requestId, true, RequestStatus.PENDING, null));
+
+        assertThatThrownBy(() -> accountService.updateBalanceOptimistic(request))
+                .isInstanceOf(lt.satsyuk.exception.AccountUpdateInProgressException.class)
+                .hasMessageContaining(requestId.toString());
+    }
+
+    @Test
+    void parseErrorResponseReturnsNullForBlank() {
+        assertThat(accountService.parseErrorResponse(null)).isNull();
+        assertThat(accountService.parseErrorResponse("  ")).isNull();
+    }
+
+    @Test
+    void parseErrorResponseReturnsNullForMalformedJson() {
+        assertThat(accountService.parseErrorResponse("{bad json")).isNull();
+    }
 }

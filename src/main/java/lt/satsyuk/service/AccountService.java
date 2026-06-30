@@ -12,7 +12,6 @@ import lt.satsyuk.exception.AccountUpdateFailedException;
 import lt.satsyuk.exception.AccountUpdateInProgressException;
 import lt.satsyuk.mapper.AccountMapper;
 import lt.satsyuk.model.Account;
-import lt.satsyuk.model.RequestStatus;
 import lt.satsyuk.model.RequestType;
 import lt.satsyuk.repository.AccountRepository;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
@@ -182,14 +181,14 @@ public class AccountService {
         };
     }
 
-    private AppResponse<AccountResponse> parseErrorResponse(String responseData) {
+    AppResponse<AccountResponse> parseErrorResponse(String responseData) {
         if (responseData == null || responseData.isBlank()) {
             return null;
         }
         try {
             return objectMapper.readValue(responseData,
                     objectMapper.getTypeFactory().constructParametricType(AppResponse.class, AccountResponse.class));
-        } catch (JsonProcessingException ex) {
+        } catch (JsonProcessingException _) {
             return null;
         }
     }
