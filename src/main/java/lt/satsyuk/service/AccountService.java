@@ -69,12 +69,6 @@ public class AccountService {
             AccountResponse response = accountMapper.toResponse(saved);
             requestService.completeRequest(requestId, authClientId, writeJson(AppResponse.ok(response)));
             return response;
-        } catch (AccountNotFoundException ex) {
-            markRequestFailed(requestId, authClientId, ex);
-            throw ex;
-        } catch (AccountOptimisticLockException ex) {
-            markRequestFailed(requestId, authClientId, ex);
-            throw ex;
         } catch (RuntimeException ex) {
             markRequestFailed(requestId, authClientId, ex);
             throw ex;
@@ -92,15 +86,7 @@ public class AccountService {
 
         UUID requestId = result.requestId();
         try {
-            AccountResponse response = safeUpdate(request.clientId(), request.amount(), authClientId,
-                    requestId, authClientId);
-            return response;
-        } catch (AccountNotFoundException ex) {
-            markRequestFailed(requestId, authClientId, ex);
-            throw ex;
-        } catch (AccountOptimisticLockException ex) {
-            markRequestFailed(requestId, authClientId, ex);
-            throw ex;
+            return safeUpdate(request.clientId(), request.amount(), authClientId, requestId, authClientId);
         } catch (RuntimeException ex) {
             markRequestFailed(requestId, authClientId, ex);
             throw ex;
