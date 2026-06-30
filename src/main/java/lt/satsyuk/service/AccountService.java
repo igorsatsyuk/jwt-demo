@@ -77,7 +77,7 @@ public class AccountService {
             markRequestFailed(requestId, authClientId, AppResponse.error(AppResponse.ErrorCode.CONFLICT.getCode(), ex.getMessage()));
             throw ex;
         } catch (RuntimeException ex) {
-            markRequestFailed(requestId, authClientId, AppResponse.error(AppResponse.ErrorCode.INTERNAL_SERVER_ERROR.getCode(), ex.getMessage()));
+            markRequestFailed(requestId, authClientId, AppResponse.error(AppResponse.ErrorCode.INTERNAL_SERVER_ERROR.getCode(), "Internal server error"));
             throw ex;
         }
     }
@@ -103,7 +103,7 @@ public class AccountService {
             markRequestFailed(requestId, authClientId, AppResponse.error(AppResponse.ErrorCode.CONFLICT.getCode(), ex.getMessage()));
             throw ex;
         } catch (RuntimeException ex) {
-            markRequestFailed(requestId, authClientId, AppResponse.error(AppResponse.ErrorCode.INTERNAL_SERVER_ERROR.getCode(), ex.getMessage()));
+            markRequestFailed(requestId, authClientId, AppResponse.error(AppResponse.ErrorCode.INTERNAL_SERVER_ERROR.getCode(), "Internal server error"));
             throw ex;
         }
     }

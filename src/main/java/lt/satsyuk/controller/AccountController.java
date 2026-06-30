@@ -48,7 +48,7 @@ public class AccountController {
             content = @Content(mediaType = "application/json"))
     @ApiResponse(responseCode = "404", description = "Account not found",
             content = @Content(mediaType = "application/json"))
-    @ApiResponse(responseCode = "409", description = "Idempotency key conflict",
+    @ApiResponse(responseCode = "409", description = "Idempotency key conflict, request already in progress, or optimistic lock conflict",
             content = @Content(mediaType = "application/json"))
     public AppResponse<AccountResponse> updateBalancePessimistic(@Valid @RequestBody UpdateBalanceRequest request) {
         return AppResponse.ok(accountService.updateBalancePessimistic(request));

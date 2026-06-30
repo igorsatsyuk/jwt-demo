@@ -110,7 +110,7 @@ public class RequestService {
                     new RequestId(idempotencyKey, authClientId));
             if (existing.isPresent()) {
                 Request request = existing.get();
-                if (request.getType() == type && request.getRequestData().equals(payloadJson)) {
+                if (request.getType() == type && jsonEquals(request.getRequestData(), payloadJson)) {
                     return new CreateRequestResult(request.getId(), true, request.getStatus(), request.getResponseData());
                 }
                 throw new IdempotencyKeyConflictException(idempotencyKey.toString());
@@ -132,7 +132,7 @@ public class RequestService {
             Optional<Request> retry = requestRepository.findById(new RequestId(requestId, authClientId));
             if (retry.isPresent()) {
                 Request existing = retry.get();
-                if (existing.getType() == type && existing.getRequestData().equals(payloadJson)) {
+                if (existing.getType() == type && jsonEquals(existing.getRequestData(), payloadJson)) {
                     return new CreateRequestResult(existing.getId(), true, existing.getStatus(), existing.getResponseData());
                 }
                 throw new IdempotencyKeyConflictException(String.valueOf(requestId));
@@ -178,6 +178,18 @@ public class RequestService {
             return objectMapper.readValue(value, Object.class);
         } catch (JsonProcessingException ex) {
             throw new IllegalStateException("Failed to deserialize stored response payload", ex);
+        }
+    }
+
+    private boolean jsonEquals(String json1, String json2) {
+        if (json1 == null && json2 == null) return true;
+        if (json1 == null || json2 == null) return false;
+        try {
+            Object tree1 = objectMapper.readTree(json1);
+            Object tree2 = objectMapper.readTree(json2);
+            return tree1.equals(tree2);
+        } catch (JsonProcessingException ex) {
+            return json1.equals(json2);
         }
     }
 }
