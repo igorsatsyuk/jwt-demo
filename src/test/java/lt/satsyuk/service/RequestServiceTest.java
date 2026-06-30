@@ -361,4 +361,45 @@ class RequestServiceTest {
         assertThat(result.alreadyExisted()).isFalse();
         verify(requestRepository).save(any(Request.class));
     }
+
+    @Test
+    void jsonEqualsReturnsTrueForBothNull() {
+        assertThat(requestService.jsonEquals(null, null)).isTrue();
+    }
+
+    @Test
+    void jsonEqualsReturnsFalseWhenOneIsNull() {
+        assertThat(requestService.jsonEquals(null, "{}")).isFalse();
+        assertThat(requestService.jsonEquals("{}", null)).isFalse();
+    }
+
+    @Test
+    void jsonEqualsReturnsTrueForSemanticallyEqualJson() {
+        assertThat(requestService.jsonEquals("{\"a\":1,\"b\":2}", "{\"b\":2,\"a\":1}")).isTrue();
+    }
+
+    @Test
+    void jsonEqualsReturnsFalseForDifferentJson() {
+        assertThat(requestService.jsonEquals("{\"a\":1}", "{\"a\":2}")).isFalse();
+    }
+
+    @Test
+    void jsonEqualsFallsBackToStringComparisonForMalformedJson() {
+        assertThat(requestService.jsonEquals("{bad", "{bad")).isTrue();
+        assertThat(requestService.jsonEquals("{bad", "{other")).isFalse();
+    }
+
+    @Test
+    void createPendingRequestIfAbsentSkipsIdempotencyCheckWhenKeyIsNull() {
+        lt.satsyuk.dto.UpdateBalanceRequest payload = new lt.satsyuk.dto.UpdateBalanceRequest(null, 1L, new java.math.BigDecimal("50.00"));
+        when(requestRepository.save(any(Request.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        RequestService.CreateRequestResult result = requestService.createPendingRequestIfAbsent(
+                null, payload, RequestType.UPDATE_BALANCE_OPTIMISTIC, CLIENT_ID);
+
+        assertThat(result.alreadyExisted()).isFalse();
+        assertThat(result.requestId()).isNotNull();
+        verify(requestRepository, never()).findById(any(RequestId.class));
+        verify(requestRepository).save(any(Request.class));
+    }
 }

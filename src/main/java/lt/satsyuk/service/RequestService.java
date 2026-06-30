@@ -181,14 +181,14 @@ public class RequestService {
         }
     }
 
-    private boolean jsonEquals(String json1, String json2) {
+    boolean jsonEquals(String json1, String json2) {
         if (json1 == null && json2 == null) return true;
         if (json1 == null || json2 == null) return false;
         try {
             Object tree1 = objectMapper.readTree(json1);
             Object tree2 = objectMapper.readTree(json2);
             return tree1.equals(tree2);
-        } catch (JsonProcessingException ex) {
+        } catch (JsonProcessingException _) {
             return json1.equals(json2);
         }
     }
