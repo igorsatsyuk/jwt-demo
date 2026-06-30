@@ -72,6 +72,15 @@ public class GlobalExceptionHandler {
                 .body(AppResponse.<Void>error(AppResponse.ErrorCode.CONFLICT.getCode(), message));
     }
 
+    @ExceptionHandler(AccountUpdateInProgressException.class)
+    public ResponseEntity<AppResponse<Void>> handleAccountUpdateInProgress(AccountUpdateInProgressException ex) {
+        String message = messageService.getMessage(ex.getMessageCode(), new Object[]{ex.getRequestId().toString()});
+        return ResponseEntity
+                .status(HttpStatus.CONFLICT)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(AppResponse.<Void>error(AppResponse.ErrorCode.CONFLICT.getCode(), message));
+    }
+
     @ExceptionHandler(ClientNotFoundException.class)
     public ResponseEntity<AppResponse<Void>> handleNotFound(ClientNotFoundException ex) {
         String message = messageService.getMessage(ex.getMessageCode(), new Object[]{String.valueOf(ex.getClientId())});

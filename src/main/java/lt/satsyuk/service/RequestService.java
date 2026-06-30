@@ -15,7 +15,9 @@ import lt.satsyuk.model.RequestType;
 import lt.satsyuk.repository.RequestRepository;
 import lombok.RequiredArgsConstructor;
 import org.quartz.SchedulerException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
@@ -35,6 +37,8 @@ public class RequestService {
     private final ObjectMapper objectMapper;
     private final MessageService messageService;
     private final SecurityService securityService;
+
+    public record CreateRequestResult(UUID requestId, boolean alreadyExisted, RequestStatus status, String savedResponseData) {}
 
     public RequestAcceptedResponse submitClientCreateRequest(CreateClientRequest createClientRequest) {
         OffsetDateTime now = now();
@@ -95,6 +99,63 @@ public class RequestService {
         );
     }
 
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public CreateRequestResult createPendingRequestIfAbsent(UUID idempotencyKey, Object payload,
+                                                            RequestType type, String authClientId) {
+        OffsetDateTime now = now();
+        String payloadJson = writeJson(payload);
+
+        if (idempotencyKey != null) {
+            Optional<Request> existing = requestRepository.findById(
+                    new RequestId(idempotencyKey, authClientId));
+            if (existing.isPresent()) {
+                Request request = existing.get();
+                if (request.getType() == type && jsonEquals(request.getRequestData(), payloadJson)) {
+                    return new CreateRequestResult(request.getId(), true, request.getStatus(), request.getResponseData());
+                }
+                throw new IdempotencyKeyConflictException(idempotencyKey.toString());
+            }
+        }
+
+        UUID requestId = idempotencyKey != null ? idempotencyKey : UUID.randomUUID();
+        Request request = Request.builder()
+                .requestId(new RequestId(requestId, authClientId))
+                .type(type)
+                .status(RequestStatus.PENDING)
+                .createdAt(now)
+                .statusChangedAt(now)
+                .requestData(payloadJson)
+                .build();
+        try {
+            requestRepository.save(request);
+        } catch (DataIntegrityViolationException ex) {
+            Optional<Request> retry = requestRepository.findById(new RequestId(requestId, authClientId));
+            if (retry.isPresent()) {
+                Request existing = retry.get();
+                if (existing.getType() == type && jsonEquals(existing.getRequestData(), payloadJson)) {
+                    return new CreateRequestResult(existing.getId(), true, existing.getStatus(), existing.getResponseData());
+                }
+                throw new IdempotencyKeyConflictException(String.valueOf(requestId));
+            }
+            throw ex;
+        }
+        return new CreateRequestResult(requestId, false, RequestStatus.PENDING, null);
+    }
+
+    @Transactional
+    public void completeRequest(UUID requestId, String authClientId, String responseData) {
+        Request request = requestRepository.findById(new RequestId(requestId, authClientId))
+                .orElseThrow(() -> new RequestNotFoundException(requestId));
+        request.markCompleted(responseData, now());
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void failRequest(UUID requestId, String authClientId, String errorData) {
+        Request request = requestRepository.findById(new RequestId(requestId, authClientId))
+                .orElseThrow(() -> new RequestNotFoundException(requestId));
+        request.markFailed(errorData, now());
+    }
+
 
     private OffsetDateTime now() {
         return OffsetDateTime.now(ZoneOffset.UTC);
@@ -117,6 +178,18 @@ public class RequestService {
             return objectMapper.readValue(value, Object.class);
         } catch (JsonProcessingException ex) {
             throw new IllegalStateException("Failed to deserialize stored response payload", ex);
+        }
+    }
+
+    boolean jsonEquals(String json1, String json2) {
+        if (json1 == null && json2 == null) return true;
+        if (json1 == null || json2 == null) return false;
+        try {
+            Object tree1 = objectMapper.readTree(json1);
+            Object tree2 = objectMapper.readTree(json2);
+            return tree1.equals(tree2);
+        } catch (JsonProcessingException _) {
+            return json1.equals(json2);
         }
     }
 }

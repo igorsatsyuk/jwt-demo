@@ -30,6 +30,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -60,7 +61,7 @@ class RequestServiceTest {
 
     @BeforeEach
     void setUp() {
-        when(securityService.clientId()).thenReturn(CLIENT_ID);
+        lenient().when(securityService.clientId()).thenReturn(CLIENT_ID);
         requestService = new RequestService(
                 requestRepository,
                 requestSchedulerService,
@@ -257,5 +258,207 @@ class RequestServiceTest {
                         "Failed to schedule request processing"
                 ))
         );
+    }
+
+    @Test
+    void createPendingRequestIfAbsentCreatesNewRequestWithoutIdempotencyKey() {
+        lt.satsyuk.dto.UpdateBalanceRequest payload = new lt.satsyuk.dto.UpdateBalanceRequest(null, 1L, new java.math.BigDecimal("50.00"));
+        when(requestRepository.save(any(Request.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        RequestService.CreateRequestResult result = requestService.createPendingRequestIfAbsent(
+                null, payload, RequestType.UPDATE_BALANCE_PESSIMISTIC, CLIENT_ID);
+
+        assertThat(result.alreadyExisted()).isFalse();
+        assertThat(result.requestId()).isNotNull();
+        assertThat(result.savedResponseData()).isNull();
+
+        ArgumentCaptor<Request> captor = ArgumentCaptor.forClass(Request.class);
+        verify(requestRepository).save(captor.capture());
+        Request saved = captor.getValue();
+        assertThat(saved.getType()).isEqualTo(RequestType.UPDATE_BALANCE_PESSIMISTIC);
+        assertThat(saved.getStatus()).isEqualTo(RequestStatus.PENDING);
+        assertThat(saved.getAuthClientId()).isEqualTo(CLIENT_ID);
+    }
+
+    @Test
+    void createPendingRequestIfAbsentUsesIdempotencyKeyAsRequestId() {
+        UUID idempotencyKey = UUID.randomUUID();
+        lt.satsyuk.dto.UpdateBalanceRequest payload = new lt.satsyuk.dto.UpdateBalanceRequest(idempotencyKey, 1L, new java.math.BigDecimal("50.00"));
+        when(requestRepository.save(any(Request.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        RequestService.CreateRequestResult result = requestService.createPendingRequestIfAbsent(
+                idempotencyKey, payload, RequestType.UPDATE_BALANCE_OPTIMISTIC, CLIENT_ID);
+
+        assertThat(result.requestId()).isEqualTo(idempotencyKey);
+        assertThat(result.alreadyExisted()).isFalse();
+
+        ArgumentCaptor<Request> captor = ArgumentCaptor.forClass(Request.class);
+        verify(requestRepository).save(captor.capture());
+        assertThat(captor.getValue().getId()).isEqualTo(idempotencyKey);
+    }
+
+    @Test
+    void createPendingRequestIfAbsentReturnsExistingRequestForSamePayload() throws Exception {
+        UUID idempotencyKey = UUID.randomUUID();
+        lt.satsyuk.dto.UpdateBalanceRequest payload = new lt.satsyuk.dto.UpdateBalanceRequest(idempotencyKey, 1L, new java.math.BigDecimal("50.00"));
+        OffsetDateTime now = OffsetDateTime.now();
+        Request existingRequest = Request.builder()
+                .requestId(new RequestId(idempotencyKey, CLIENT_ID))
+                .type(RequestType.UPDATE_BALANCE_PESSIMISTIC)
+                .status(RequestStatus.COMPLETED)
+                .createdAt(now)
+                .statusChangedAt(now)
+                .requestData(objectMapper.writeValueAsString(payload))
+                .responseData("{\"code\":0,\"data\":{\"accountId\":1,\"clientId\":1,\"balance\":\"60.00\"},\"message\":\"OK\"}")
+                .build();
+        when(requestRepository.findById(new RequestId(idempotencyKey, CLIENT_ID)))
+                .thenReturn(Optional.of(existingRequest));
+
+        RequestService.CreateRequestResult result = requestService.createPendingRequestIfAbsent(
+                idempotencyKey, payload, RequestType.UPDATE_BALANCE_PESSIMISTIC, CLIENT_ID);
+
+        assertThat(result.alreadyExisted()).isTrue();
+        assertThat(result.requestId()).isEqualTo(idempotencyKey);
+        assertThat(result.savedResponseData()).contains("\"code\":0");
+        verify(requestRepository, never()).save(any(Request.class));
+    }
+
+    @Test
+    void createPendingRequestIfAbsentThrowsConflictForSameKeyDifferentPayload() throws Exception {
+        UUID idempotencyKey = UUID.randomUUID();
+        lt.satsyuk.dto.UpdateBalanceRequest incoming = new lt.satsyuk.dto.UpdateBalanceRequest(idempotencyKey, 1L, new java.math.BigDecimal("50.00"));
+        lt.satsyuk.dto.UpdateBalanceRequest existingPayload = new lt.satsyuk.dto.UpdateBalanceRequest(idempotencyKey, 1L, new java.math.BigDecimal("99.00"));
+        OffsetDateTime now = OffsetDateTime.now();
+        Request existingRequest = Request.builder()
+                .requestId(new RequestId(idempotencyKey, CLIENT_ID))
+                .type(RequestType.UPDATE_BALANCE_PESSIMISTIC)
+                .status(RequestStatus.COMPLETED)
+                .createdAt(now)
+                .statusChangedAt(now)
+                .requestData(objectMapper.writeValueAsString(existingPayload))
+                .build();
+        when(requestRepository.findById(new RequestId(idempotencyKey, CLIENT_ID)))
+                .thenReturn(Optional.of(existingRequest));
+
+        assertThatThrownBy(() -> requestService.createPendingRequestIfAbsent(
+                idempotencyKey, incoming, RequestType.UPDATE_BALANCE_PESSIMISTIC, CLIENT_ID))
+                .isInstanceOf(IdempotencyKeyConflictException.class)
+                .hasMessageContaining(idempotencyKey.toString());
+    }
+
+    @Test
+    void createPendingRequestIfAbsentCreatesNewRequestWhenNoExistingFound() {
+        UUID idempotencyKey = UUID.randomUUID();
+        lt.satsyuk.dto.UpdateBalanceRequest payload = new lt.satsyuk.dto.UpdateBalanceRequest(idempotencyKey, 1L, new java.math.BigDecimal("50.00"));
+        when(requestRepository.findById(new RequestId(idempotencyKey, CLIENT_ID)))
+                .thenReturn(Optional.empty());
+        when(requestRepository.save(any(Request.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        RequestService.CreateRequestResult result = requestService.createPendingRequestIfAbsent(
+                idempotencyKey, payload, RequestType.UPDATE_BALANCE_PESSIMISTIC, CLIENT_ID);
+
+        assertThat(result.requestId()).isEqualTo(idempotencyKey);
+        assertThat(result.alreadyExisted()).isFalse();
+        verify(requestRepository).save(any(Request.class));
+    }
+
+    @Test
+    void jsonEqualsReturnsTrueForBothNull() {
+        assertThat(requestService.jsonEquals(null, null)).isTrue();
+    }
+
+    @Test
+    void jsonEqualsReturnsFalseWhenOneIsNull() {
+        assertThat(requestService.jsonEquals(null, "{}")).isFalse();
+        assertThat(requestService.jsonEquals("{}", null)).isFalse();
+    }
+
+    @Test
+    void jsonEqualsReturnsTrueForSemanticallyEqualJson() {
+        assertThat(requestService.jsonEquals("{\"a\":1,\"b\":2}", "{\"b\":2,\"a\":1}")).isTrue();
+    }
+
+    @Test
+    void jsonEqualsReturnsFalseForDifferentJson() {
+        assertThat(requestService.jsonEquals("{\"a\":1}", "{\"a\":2}")).isFalse();
+    }
+
+    @Test
+    void jsonEqualsFallsBackToStringComparisonForMalformedJson() {
+        assertThat(requestService.jsonEquals("{bad", "{bad")).isTrue();
+        assertThat(requestService.jsonEquals("{bad", "{other")).isFalse();
+    }
+
+    @Test
+    void createPendingRequestIfAbsentSkipsIdempotencyCheckWhenKeyIsNull() {
+        lt.satsyuk.dto.UpdateBalanceRequest payload = new lt.satsyuk.dto.UpdateBalanceRequest(null, 1L, new java.math.BigDecimal("50.00"));
+        when(requestRepository.save(any(Request.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        RequestService.CreateRequestResult result = requestService.createPendingRequestIfAbsent(
+                null, payload, RequestType.UPDATE_BALANCE_OPTIMISTIC, CLIENT_ID);
+
+        assertThat(result.alreadyExisted()).isFalse();
+        assertThat(result.requestId()).isNotNull();
+        verify(requestRepository, never()).findById(any(RequestId.class));
+        verify(requestRepository).save(any(Request.class));
+    }
+
+    @Test
+    void createPendingRequestIfAbsentThrowsConflictForSameKeyDifferentType() throws Exception {
+        UUID idempotencyKey = UUID.randomUUID();
+        lt.satsyuk.dto.UpdateBalanceRequest payload = new lt.satsyuk.dto.UpdateBalanceRequest(idempotencyKey, 1L, new java.math.BigDecimal("50.00"));
+        OffsetDateTime now = OffsetDateTime.now();
+        Request existingRequest = Request.builder()
+                .requestId(new RequestId(idempotencyKey, CLIENT_ID))
+                .type(RequestType.UPDATE_BALANCE_OPTIMISTIC)
+                .status(RequestStatus.COMPLETED)
+                .createdAt(now)
+                .statusChangedAt(now)
+                .requestData(objectMapper.writeValueAsString(payload))
+                .build();
+        when(requestRepository.findById(new RequestId(idempotencyKey, CLIENT_ID)))
+                .thenReturn(Optional.of(existingRequest));
+
+        assertThatThrownBy(() -> requestService.createPendingRequestIfAbsent(
+                idempotencyKey, payload, RequestType.UPDATE_BALANCE_PESSIMISTIC, CLIENT_ID))
+                .isInstanceOf(IdempotencyKeyConflictException.class);
+    }
+
+    @Test
+    void createPendingRequestIfAbsentThrowsConflictOnRetryWithTypeMismatch() throws Exception {
+        UUID idempotencyKey = UUID.randomUUID();
+        lt.satsyuk.dto.UpdateBalanceRequest payload = new lt.satsyuk.dto.UpdateBalanceRequest(idempotencyKey, 1L, new java.math.BigDecimal("50.00"));
+        OffsetDateTime now = OffsetDateTime.now();
+        Request existingRequest = Request.builder()
+                .requestId(new RequestId(idempotencyKey, CLIENT_ID))
+                .type(RequestType.UPDATE_BALANCE_OPTIMISTIC)
+                .status(RequestStatus.PENDING)
+                .createdAt(now)
+                .statusChangedAt(now)
+                .requestData(objectMapper.writeValueAsString(payload))
+                .build();
+        when(requestRepository.findById(new RequestId(idempotencyKey, CLIENT_ID)))
+                .thenReturn(Optional.empty())
+                .thenReturn(Optional.of(existingRequest));
+        when(requestRepository.save(any(Request.class)))
+                .thenThrow(new org.springframework.dao.DataIntegrityViolationException("PK violation"));
+
+        assertThatThrownBy(() -> requestService.createPendingRequestIfAbsent(
+                idempotencyKey, payload, RequestType.UPDATE_BALANCE_PESSIMISTIC, CLIENT_ID))
+                .isInstanceOf(IdempotencyKeyConflictException.class);
+    }
+
+    @Test
+    void createPendingRequestIfAbsentRethrowsOnRetryWithNoExistingRow() {
+        UUID idempotencyKey = UUID.randomUUID();
+        lt.satsyuk.dto.UpdateBalanceRequest payload = new lt.satsyuk.dto.UpdateBalanceRequest(idempotencyKey, 1L, new java.math.BigDecimal("50.00"));
+        when(requestRepository.save(any(Request.class)))
+                .thenThrow(new org.springframework.dao.DataIntegrityViolationException("PK violation"));
+        when(requestRepository.findById(new RequestId(idempotencyKey, CLIENT_ID)))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> requestService.createPendingRequestIfAbsent(
+                idempotencyKey, payload, RequestType.UPDATE_BALANCE_PESSIMISTIC, CLIENT_ID))
+                .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
     }
 }

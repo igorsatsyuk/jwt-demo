@@ -62,7 +62,7 @@ class AccountIntegrationIT extends KeycloakIntegrationTest {
         AccountResponse response = postAndReturnData(
                 accountUrl + "/balance/pessimistic",
                 token,
-                new UpdateBalanceRequest(account.getClient().getId(), new BigDecimal("250.75")),
+                new UpdateBalanceRequest(null, account.getClient().getId(), new BigDecimal("250.75")),
                 AccountResponse.class
         );
 
@@ -82,7 +82,7 @@ class AccountIntegrationIT extends KeycloakIntegrationTest {
         AccountResponse response = postAndReturnData(
                 accountUrl + "/balance/optimistic",
                 token,
-                new UpdateBalanceRequest(account.getClient().getId(), new BigDecimal("75.00")),
+                new UpdateBalanceRequest(null, account.getClient().getId(), new BigDecimal("75.00")),
                 AccountResponse.class
         );
 
@@ -115,7 +115,7 @@ class AccountIntegrationIT extends KeycloakIntegrationTest {
                 accountUrl + "/balance/pessimistic",
                 token,
                 null,
-                new UpdateBalanceRequest(999999L, new BigDecimal("100.00"))
+                new UpdateBalanceRequest(null, 999999L, new BigDecimal("100.00"))
         );
 
         assertErrorStatusAndBody(
