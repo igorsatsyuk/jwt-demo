@@ -304,7 +304,7 @@ class AccountServiceTest {
     }
 
     @Test
-    void readSavedResponseReturnsNullForBlankData() throws Exception {
+    void readSavedResponseReturnsNullForBlankData() {
         AccountResponse result = accountService.readSavedResponse(null);
         assertThat(result).isNull();
 
