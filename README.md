@@ -453,10 +453,16 @@ Requires bearer token role: `UPDATE_BALANCE`
 
 ```json
 {
+  "idempotencyKey": "550e8400-e29b-41d4-a716-446655440000",
   "clientId": 1,
   "amount": 100.50
 }
 ```
+
+The `idempotencyKey` is optional. When provided:
+- Same key + same payload → returns the cached result (no re-execution)
+- Same key + different payload → returns `409 Conflict`
+- Without key → each request is executed independently
 
 ---
 
@@ -467,6 +473,7 @@ Requires bearer token role: `UPDATE_BALANCE`
 
 ```json
 {
+  "idempotencyKey": "550e8400-e29b-41d4-a716-446655440001",
   "clientId": 1,
   "amount": -50.00
 }
