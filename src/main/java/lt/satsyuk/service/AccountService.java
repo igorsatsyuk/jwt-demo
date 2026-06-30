@@ -155,7 +155,7 @@ public class AccountService {
         return false;
     }
 
-    private AccountResponse readSavedResponse(String responseData) {
+    AccountResponse readSavedResponse(String responseData) {
         if (responseData == null || responseData.isBlank()) {
             return null;
         }

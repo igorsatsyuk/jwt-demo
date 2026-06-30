@@ -223,4 +223,99 @@ class AccountServiceTest {
                 .isInstanceOf(AccountNotFoundException.class);
         verify(accountRepository, never()).saveAndFlush(any(Account.class));
     }
+
+    @Test
+    void updateBalanceOptimisticReturnsExistingResultForIdempotentReplay() throws Exception {
+        UpdateBalanceRequest request = new UpdateBalanceRequest(null, 11L, new BigDecimal("3.00"));
+        AccountResponse savedResponse = new AccountResponse(22L, 11L, new BigDecimal("13.00"));
+        String savedResponseJson = objectMapper.writeValueAsString(AppResponse.ok(savedResponse));
+        UUID requestId = UUID.randomUUID();
+
+        when(requestService.createPendingRequestIfAbsent(null, request, RequestType.UPDATE_BALANCE_OPTIMISTIC, AUTH_CLIENT_ID))
+                .thenReturn(new RequestService.CreateRequestResult(requestId, true, savedResponseJson));
+
+        AccountResponse actual = accountService.updateBalanceOptimistic(request);
+
+        assertThat(actual).isEqualTo(savedResponse);
+    }
+
+    @Test
+    void updateBalanceOptimisticFailsRequestOnAccountNotFound() {
+        AccountService spyService = spy(new AccountService(accountRepository, accountMapper, transactionManager,
+                requestService, securityService, objectMapper));
+        UpdateBalanceRequest request = new UpdateBalanceRequest(null, 11L, new BigDecimal("3.00"));
+        UUID requestId = UUID.randomUUID();
+
+        when(requestService.createPendingRequestIfAbsent(null, request, RequestType.UPDATE_BALANCE_OPTIMISTIC, AUTH_CLIENT_ID))
+                .thenReturn(new RequestService.CreateRequestResult(requestId, false, null));
+        doThrow(new AccountNotFoundException(11L)).when(spyService).safeUpdate(11L, new BigDecimal("3.00"), AUTH_CLIENT_ID);
+
+        assertThatThrownBy(() -> spyService.updateBalanceOptimistic(request))
+                .isInstanceOf(AccountNotFoundException.class);
+        verify(requestService).failRequest(eq(requestId), eq(AUTH_CLIENT_ID), any(String.class));
+    }
+
+    @Test
+    void updateBalanceOptimisticFailsRequestOnOptimisticLock() {
+        AccountService spyService = spy(new AccountService(accountRepository, accountMapper, transactionManager,
+                requestService, securityService, objectMapper));
+        UpdateBalanceRequest request = new UpdateBalanceRequest(null, 11L, new BigDecimal("3.00"));
+        UUID requestId = UUID.randomUUID();
+
+        when(requestService.createPendingRequestIfAbsent(null, request, RequestType.UPDATE_BALANCE_OPTIMISTIC, AUTH_CLIENT_ID))
+                .thenReturn(new RequestService.CreateRequestResult(requestId, false, null));
+        doThrow(new AccountOptimisticLockException(11L)).when(spyService).safeUpdate(11L, new BigDecimal("3.00"), AUTH_CLIENT_ID);
+
+        assertThatThrownBy(() -> spyService.updateBalanceOptimistic(request))
+                .isInstanceOf(AccountOptimisticLockException.class);
+        verify(requestService).failRequest(eq(requestId), eq(AUTH_CLIENT_ID), any(String.class));
+    }
+
+    @Test
+    void updateBalanceOptimisticFailsRequestOnUnexpectedException() {
+        AccountService spyService = spy(new AccountService(accountRepository, accountMapper, transactionManager,
+                requestService, securityService, objectMapper));
+        UpdateBalanceRequest request = new UpdateBalanceRequest(null, 11L, new BigDecimal("3.00"));
+        UUID requestId = UUID.randomUUID();
+
+        when(requestService.createPendingRequestIfAbsent(null, request, RequestType.UPDATE_BALANCE_OPTIMISTIC, AUTH_CLIENT_ID))
+                .thenReturn(new RequestService.CreateRequestResult(requestId, false, null));
+        doThrow(new IllegalStateException("boom")).when(spyService).safeUpdate(11L, new BigDecimal("3.00"), AUTH_CLIENT_ID);
+
+        assertThatThrownBy(() -> spyService.updateBalanceOptimistic(request))
+                .isInstanceOf(IllegalStateException.class);
+        verify(requestService).failRequest(eq(requestId), eq(AUTH_CLIENT_ID), any(String.class));
+    }
+
+    @Test
+    void updateBalancePessimisticFailsRequestOnUnexpectedException() {
+        UpdateBalanceRequest request = new UpdateBalanceRequest(null, 11L, BigDecimal.ONE);
+        UUID requestId = UUID.randomUUID();
+
+        when(requestService.createPendingRequestIfAbsent(null, request, RequestType.UPDATE_BALANCE_PESSIMISTIC, AUTH_CLIENT_ID))
+                .thenReturn(new RequestService.CreateRequestResult(requestId, false, null));
+        when(accountRepository.findByClientIdAndAuthClientIdForPessimisticUpdate(11L, AUTH_CLIENT_ID))
+                .thenThrow(new IllegalStateException("db error"));
+
+        assertThatThrownBy(() -> accountService.updateBalancePessimistic(request))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("db error");
+        verify(requestService).failRequest(eq(requestId), eq(AUTH_CLIENT_ID), any(String.class));
+    }
+
+    @Test
+    void readSavedResponseReturnsNullForBlankData() throws Exception {
+        AccountResponse result = accountService.readSavedResponse(null);
+        assertThat(result).isNull();
+
+        result = accountService.readSavedResponse("  ");
+        assertThat(result).isNull();
+    }
+
+    @Test
+    void readSavedResponseThrowsForMalformedJson() {
+        assertThatThrownBy(() -> accountService.readSavedResponse("{invalid json"))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Failed to deserialize saved response");
+    }
 }
