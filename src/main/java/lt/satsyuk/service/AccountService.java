@@ -14,6 +14,7 @@ import lt.satsyuk.mapper.AccountMapper;
 import lt.satsyuk.model.Account;
 import lt.satsyuk.model.RequestType;
 import lt.satsyuk.repository.AccountRepository;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -24,6 +25,7 @@ import java.math.BigDecimal;
 import java.util.Objects;
 import java.util.UUID;
 
+@Slf4j
 @Service
 public class AccountService {
     private static final int MAX_OPTIMISTIC_RETRIES = 3;
@@ -69,14 +71,10 @@ public class AccountService {
             requestService.completeRequest(requestId, authClientId, writeJson(AppResponse.ok(response)));
             return response;
         } catch (AccountNotFoundException | AccountOptimisticLockException ex) {
-            requestService.failRequest(requestId, authClientId, writeJson(
-                    AppResponse.error(AppResponse.ErrorCode.BAD_REQUEST.getCode(), ex.getMessage())
-            ));
+            markRequestFailed(requestId, authClientId, AppResponse.error(AppResponse.ErrorCode.BAD_REQUEST.getCode(), ex.getMessage()));
             throw ex;
         } catch (RuntimeException ex) {
-            requestService.failRequest(requestId, authClientId, writeJson(
-                    AppResponse.error(AppResponse.ErrorCode.INTERNAL_SERVER_ERROR.getCode(), ex.getMessage())
-            ));
+            markRequestFailed(requestId, authClientId, AppResponse.error(AppResponse.ErrorCode.INTERNAL_SERVER_ERROR.getCode(), ex.getMessage()));
             throw ex;
         }
     }
@@ -96,14 +94,10 @@ public class AccountService {
             requestService.completeRequest(requestId, authClientId, writeJson(AppResponse.ok(response)));
             return response;
         } catch (AccountNotFoundException | AccountOptimisticLockException ex) {
-            requestService.failRequest(requestId, authClientId, writeJson(
-                    AppResponse.error(AppResponse.ErrorCode.BAD_REQUEST.getCode(), ex.getMessage())
-            ));
+            markRequestFailed(requestId, authClientId, AppResponse.error(AppResponse.ErrorCode.BAD_REQUEST.getCode(), ex.getMessage()));
             throw ex;
         } catch (RuntimeException ex) {
-            requestService.failRequest(requestId, authClientId, writeJson(
-                    AppResponse.error(AppResponse.ErrorCode.INTERNAL_SERVER_ERROR.getCode(), ex.getMessage())
-            ));
+            markRequestFailed(requestId, authClientId, AppResponse.error(AppResponse.ErrorCode.INTERNAL_SERVER_ERROR.getCode(), ex.getMessage()));
             throw ex;
         }
     }
@@ -200,6 +194,14 @@ public class AccountService {
             return objectMapper.writeValueAsString(value);
         } catch (JsonProcessingException ex) {
             throw new IllegalStateException("Failed to serialize response", ex);
+        }
+    }
+
+    private void markRequestFailed(UUID requestId, String authClientId, AppResponse<AccountResponse> errorResponse) {
+        try {
+            requestService.failRequest(requestId, authClientId, writeJson(errorResponse));
+        } catch (RuntimeException ex) {
+            log.warn("Failed to mark request {} as FAILED: {}", requestId, ex.getMessage());
         }
     }
 }

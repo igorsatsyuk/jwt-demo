@@ -99,6 +99,7 @@ public class RequestService {
         );
     }
 
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public CreateRequestResult createPendingRequestIfAbsent(UUID idempotencyKey, Object payload,
                                                             RequestType type, String authClientId) {
         OffsetDateTime now = now();
