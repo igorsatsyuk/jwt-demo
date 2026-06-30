@@ -63,30 +63,6 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
-    void handleAccountUpdateFailedReturnsCorrectStatus() {
-        AccountUpdateFailedException ex = new AccountUpdateFailedException(40401, "Account not found");
-        when(messageService.getMessage("error.account.updateFailed", new Object[]{"Account not found"}))
-                .thenReturn("Ошибка обновления баланса: Account not found");
-
-        ResponseEntity<AppResponse<Void>> response = handler.handleAccountUpdateFailed(ex);
-
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
-        assertThat(response.getBody()).isNotNull();
-        assertThat(response.getBody().code()).isEqualTo(40401);
-    }
-
-    @Test
-    void handleAccountUpdateFailedReturns500ForInternalError() {
-        AccountUpdateFailedException ex = new AccountUpdateFailedException(50000, "Internal server error");
-        when(messageService.getMessage("error.account.updateFailed", new Object[]{"Internal server error"}))
-                .thenReturn("Ошибка обновления баланса: Internal server error");
-
-        ResponseEntity<AppResponse<Void>> response = handler.handleAccountUpdateFailed(ex);
-
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
-    }
-
-    @Test
     void handleAccountUpdateInProgressReturns409() {
         UUID requestId = UUID.randomUUID();
         AccountUpdateInProgressException ex = new AccountUpdateInProgressException(requestId);

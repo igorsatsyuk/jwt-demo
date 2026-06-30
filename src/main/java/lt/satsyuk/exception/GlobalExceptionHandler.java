@@ -72,16 +72,6 @@ public class GlobalExceptionHandler {
                 .body(AppResponse.<Void>error(AppResponse.ErrorCode.CONFLICT.getCode(), message));
     }
 
-    @ExceptionHandler(AccountUpdateFailedException.class)
-    public ResponseEntity<AppResponse<Void>> handleAccountUpdateFailed(AccountUpdateFailedException ex) {
-        String message = messageService.getMessage(ex.getMessageCode(), new Object[]{ex.getErrorMessage()});
-        HttpStatus status = resolveHttpStatus(ex.getErrorCode());
-        return ResponseEntity
-                .status(status)
-                .contentType(MediaType.APPLICATION_JSON)
-                .body(AppResponse.<Void>error(ex.getErrorCode(), message));
-    }
-
     @ExceptionHandler(AccountUpdateInProgressException.class)
     public ResponseEntity<AppResponse<Void>> handleAccountUpdateInProgress(AccountUpdateInProgressException ex) {
         String message = messageService.getMessage(ex.getMessageCode(), new Object[]{ex.getRequestId().toString()});
