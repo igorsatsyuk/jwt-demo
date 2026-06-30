@@ -347,7 +347,7 @@ class RequestServiceTest {
     }
 
     @Test
-    void createPendingRequestIfAbsentAllowsSameKeyForDifferentClient() {
+    void createPendingRequestIfAbsentCreatesNewRequestWhenNoExistingFound() {
         UUID idempotencyKey = UUID.randomUUID();
         lt.satsyuk.dto.UpdateBalanceRequest payload = new lt.satsyuk.dto.UpdateBalanceRequest(idempotencyKey, 1L, new java.math.BigDecimal("50.00"));
         when(requestRepository.findById(new RequestId(idempotencyKey, CLIENT_ID)))

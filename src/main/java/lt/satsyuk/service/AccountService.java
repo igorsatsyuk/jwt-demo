@@ -70,8 +70,11 @@ public class AccountService {
             AccountResponse response = accountMapper.toResponse(saved);
             requestService.completeRequest(requestId, authClientId, writeJson(AppResponse.ok(response)));
             return response;
-        } catch (AccountNotFoundException | AccountOptimisticLockException ex) {
-            markRequestFailed(requestId, authClientId, AppResponse.error(AppResponse.ErrorCode.BAD_REQUEST.getCode(), ex.getMessage()));
+        } catch (AccountNotFoundException ex) {
+            markRequestFailed(requestId, authClientId, AppResponse.error(AppResponse.ErrorCode.NOT_FOUND.getCode(), ex.getMessage()));
+            throw ex;
+        } catch (AccountOptimisticLockException ex) {
+            markRequestFailed(requestId, authClientId, AppResponse.error(AppResponse.ErrorCode.CONFLICT.getCode(), ex.getMessage()));
             throw ex;
         } catch (RuntimeException ex) {
             markRequestFailed(requestId, authClientId, AppResponse.error(AppResponse.ErrorCode.INTERNAL_SERVER_ERROR.getCode(), ex.getMessage()));
@@ -93,8 +96,11 @@ public class AccountService {
             AccountResponse response = safeUpdate(request.clientId(), request.amount(), authClientId);
             requestService.completeRequest(requestId, authClientId, writeJson(AppResponse.ok(response)));
             return response;
-        } catch (AccountNotFoundException | AccountOptimisticLockException ex) {
-            markRequestFailed(requestId, authClientId, AppResponse.error(AppResponse.ErrorCode.BAD_REQUEST.getCode(), ex.getMessage()));
+        } catch (AccountNotFoundException ex) {
+            markRequestFailed(requestId, authClientId, AppResponse.error(AppResponse.ErrorCode.NOT_FOUND.getCode(), ex.getMessage()));
+            throw ex;
+        } catch (AccountOptimisticLockException ex) {
+            markRequestFailed(requestId, authClientId, AppResponse.error(AppResponse.ErrorCode.CONFLICT.getCode(), ex.getMessage()));
             throw ex;
         } catch (RuntimeException ex) {
             markRequestFailed(requestId, authClientId, AppResponse.error(AppResponse.ErrorCode.INTERNAL_SERVER_ERROR.getCode(), ex.getMessage()));
