@@ -7,6 +7,7 @@ import lt.satsyuk.service.SecurityService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -28,12 +29,12 @@ class AccountControllerTest {
     @Mock
     private SecurityService securityService;
 
+    @InjectMocks
     private AccountController accountController;
 
     @BeforeEach
     void setUp() {
         lenient().when(securityService.clientId()).thenReturn(AUTH_CLIENT_ID);
-        accountController = new AccountController(accountService, securityService);
     }
 
     @Test

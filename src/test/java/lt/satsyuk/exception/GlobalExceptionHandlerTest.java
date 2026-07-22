@@ -2,9 +2,9 @@ package lt.satsyuk.exception;
 
 import lt.satsyuk.dto.AppResponse;
 import lt.satsyuk.service.MessageService;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.MessageSource;
@@ -26,12 +26,8 @@ class GlobalExceptionHandlerTest {
     @Mock
     private MessageService messageService;
 
+    @InjectMocks
     private GlobalExceptionHandler handler;
-
-    @BeforeEach
-    void setUp() {
-        handler = new GlobalExceptionHandler(messageSource, messageService);
-    }
 
     @Test
     void handleIdempotencyKeyConflictReturns409() {
