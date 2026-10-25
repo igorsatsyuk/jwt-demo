@@ -11,6 +11,7 @@ import org.quartz.Trigger;
 import org.quartz.TriggerBuilder;
 import org.springframework.stereotype.Service;
 
+import java.util.Objects;
 import java.util.UUID;
 
 @Service
@@ -26,11 +27,17 @@ public class RequestSchedulerService {
     }
 
     public void scheduleClientCreateRequest(UUID requestId, String authClientId) throws SchedulerException {
-        JobDataMap jobDataMap = new JobDataMap();
-        jobDataMap.put(RequestProcessingJob.REQUEST_ID_KEY, requestId.toString());
-        jobDataMap.put(RequestProcessingJob.AUTH_CLIENT_ID_KEY, authClientId);
+        UUID nonNullRequestId = Objects.requireNonNull(requestId, "requestId must not be null");
+        String nonNullAuthClientId = Objects.requireNonNull(authClientId, "authClientId must not be null");
+        if (nonNullAuthClientId.isBlank()) {
+            throw new IllegalArgumentException("authClientId must not be blank");
+        }
 
-        String jobIdentity = requestId + "|" + authClientId;
+        JobDataMap jobDataMap = new JobDataMap();
+        jobDataMap.put(RequestProcessingJob.REQUEST_ID_KEY, nonNullRequestId.toString());
+        jobDataMap.put(RequestProcessingJob.AUTH_CLIENT_ID_KEY, nonNullAuthClientId);
+
+        String jobIdentity = nonNullRequestId + "|" + nonNullAuthClientId;
 
         JobDetail jobDetail = JobBuilder.newJob(RequestProcessingJob.class)
                 .withIdentity(jobIdentity, REQUEST_JOB_GROUP)
