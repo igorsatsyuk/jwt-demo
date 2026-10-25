@@ -1,6 +1,5 @@
 package lt.satsyuk.service;
 
-import lt.satsyuk.job.RequestProcessingJob;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.NullSource;
@@ -42,7 +41,9 @@ class RequestSchedulerServiceTest {
     @NullSource
     @ValueSource(strings = {""})
     void rejectsNullOrBlankAuthClientId(String authClientId) {
-        assertThatThrownBy(() -> service.scheduleClientCreateRequest(UUID.randomUUID(), authClientId))
+        UUID requestId = UUID.randomUUID();
+
+        assertThatThrownBy(() -> service.scheduleClientCreateRequest(requestId, authClientId))
                 .isInstanceOfAny(NullPointerException.class, IllegalArgumentException.class);
     }
 }
